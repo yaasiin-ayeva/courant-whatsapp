@@ -1,0 +1,15 @@
+{
+  "name": "courant-whatsapp-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone WhatsApp transport for Courant, driven by whatsapp-web.js. Pairs a real WhatsApp number (QR), sends outbound messages with human-like pacing, and forwards inbound messages to Courant. No vendor/BSP.",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4",
+    "whatsapp-web.js": "^1.26.0"
+  }
+}

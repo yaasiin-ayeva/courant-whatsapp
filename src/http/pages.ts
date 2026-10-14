@@ -117,8 +117,9 @@ export const landingHtml = `<!doctype html>
     .plan li:before{content:"✓";position:absolute;left:0;color:var(--accent);font-weight:800}
     .plan .btn{width:100%;justify-content:center}
     .pricing-note{text-align:center;color:var(--soft);font-size:13.5px;margin-top:22px}
-    .curbar{display:inline-flex;align-items:center;gap:8px;margin:-10px 0 30px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 10px 7px 15px;font-size:14px;color:var(--muted);box-shadow:0 1px 2px rgba(16,17,19,.04)}
-    .curbar select{border:none;background:transparent;font:inherit;font-weight:700;color:var(--ink);outline:none;cursor:pointer;padding:3px 6px;border-radius:8px}
+    .curbar{display:inline-flex;align-items:center;gap:4px;margin:-14px 0 26px;font-size:12.5px;color:var(--soft)}
+    .curbar select{border:none;background:transparent;font:inherit;font-weight:600;color:var(--muted);outline:none;cursor:pointer;padding:1px 2px}
+    .curbar select:hover{color:var(--ink)}
     /* form */
     .formwrap{display:grid;grid-template-columns:1.05fr .95fr;gap:38px;align-items:start}
     @media(max-width:820px){.formwrap{grid-template-columns:1fr}}
@@ -208,7 +209,7 @@ export const landingHtml = `<!doctype html>
       <span class="eyebrow">Pricing</span>
       <h2>Flat pricing. No per-message fees.</h2>
       <p class="lead">Pay for the numbers you run — not for every message you send. Cancel anytime.</p>
-      <div class="curbar">Show prices in
+      <div class="curbar">Prices in
         <select id="cur" aria-label="Currency">
           <option value="USD">USD $</option>
           <option value="EUR">EUR €</option>

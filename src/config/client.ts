@@ -34,9 +34,9 @@ const CHROMIUM_ARGS = [
   '--safebrowsing-disable-auto-update',
 ]
 
-export function buildClientConfig() {
+export function buildClientConfig(clientId: string) {
   return {
-    authStrategy: new LocalAuth({ clientId: env.clientId, dataPath: env.sessionDir }),
+    authStrategy: new LocalAuth({ clientId, dataPath: env.sessionDir }),
     puppeteer: {
       headless: true,
       executablePath: env.chromiumPath,

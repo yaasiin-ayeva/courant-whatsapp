@@ -1,11 +1,13 @@
 # Courant WhatsApp Worker
 
-A **standalone, TypeScript** WhatsApp transport — no vendor, no BSP, no per-message cost. It drives
-one real WhatsApp number through WhatsApp Web (headless Chromium) via
+A **standalone, TypeScript, multi-session** WhatsApp transport — no vendor, no BSP, no per-message
+cost. It drives several real WhatsApp numbers through WhatsApp Web (headless Chromium) via
 [`whatsapp-web.js`](https://wwebjs.dev) and exposes a small, clean **HTTP API**. Courant consumes it
 over HTTP — a base URL + an API key — exactly like the Google-Maps lead scraper.
 
-This is its **own repo** (`courant-whatsapp`) and its own deployable service. One worker = one number.
+This is its **own repo** (`courant-whatsapp`) and its own deployable service. One worker holds many
+**sessions**, one per number, each addressed by an id (Courant uses the project id). Each session is
+its own headless Chromium (~300–500 MB RAM), so size the host for the number of numbers you pair.
 
 > ⚠️ **Unofficial & against WhatsApp's ToS.** Cold/bulk messaging gets numbers **banned**. Use it for
 > **low-volume, opt-in / human-assisted** conversations. Compliance (consent, opt-out) is enforced in
@@ -16,16 +18,20 @@ This is its **own repo** (`courant-whatsapp`) and its own deployable service. On
 ```
 src/
   config/   env (typed + validated), client (hardened Chromium + LocalAuth)
-  core/     session (lifecycle, QR, auto-reconnect, humanised send),
-            queue (durable, paced, retries), webhook (HMAC + retry), logger, errors
-  http/     server, auth (API key + rate limit), routes
+  core/     session (one number: lifecycle, QR, auto-reconnect, humanised send + its queue),
+            manager (the set of sessions + on-disk registry), queue (durable, paced, retries),
+            webhook (HMAC + retry), logger, errors
+  http/     server, auth (API key + rate limit), routes (/sessions/:id/…)
   utils/    phone (E.164), time (jitter/window), hmac
   index.ts  bootstrap + graceful shutdown
 ```
 
 **Highlights**
-- **Async API** (`POST /api/v1/messages` → `202 {id}`, poll `GET /api/v1/messages/:id`) + signed webhook.
-- **Durable queue** on disk — a restart never drops a message; idempotent by `idempotencyKey`.
+- **Multi-session** — many numbers in one worker, each a session addressed by id; the set is
+  persisted so every number is recreated (and its queue resumed) on restart.
+- **Async API** (`POST /api/v1/sessions/:id/messages` → `202 {id}`, poll the job) + signed webhook
+  carrying the `sessionId`.
+- **Durable per-session queue** on disk — a restart never drops a message; idempotent by `idempotencyKey`.
 - **Human pacing / anti-ban** — typing simulation, randomised delays, daily cap + warm-up, quiet-hours
   window, per-recipient gap, number validation. No third-party "anti-ban" packages.
 - **Robust session** — auto-reconnect with backoff, QR state machine, `logout`/`restart`.
@@ -45,8 +51,9 @@ npm run build && npm start      # or: npm run dev
 
 Generate an API key: `openssl rand -hex 32 | sed 's/^/wa_/'`.
 
-Then **pair the number once**: `GET /api/v1/session`, open the returned `qr` data-URL, scan it from
-**WhatsApp → Linked devices**. The session is persisted in `SESSION_DIR`.
+Then **create a session and pair it once**: `POST /api/v1/sessions {"id":"<your-id>"}` returns the
+session state with a `qr` data-URL — scan it from **WhatsApp → Linked devices**. Repeat with another
+id to add another number. Sessions persist in `SESSION_DIR` (and the registry in `DATA_DIR`).
 
 ### Docker
 ```bash
@@ -57,8 +64,9 @@ docker run -d --name courant-whatsapp -p 127.0.0.1:8088:8088 --env-file .env \
 
 ## How Courant uses it
 
-Courant's engine submits sends to `POST /api/v1/messages` as the **WhatsApp transport** for a
-WhatsApp campaign (one worker per number). It consumes this service through
+Each Courant **project** maps to one session (its `sessionId` is the project id). The project's
+WhatsApp settings create/pair that session; a WhatsApp campaign submits sends to
+`POST /api/v1/sessions/<projectId>/messages`. Courant consumes this service through
 `config.whatsapp` (`WA_WORKER_URL` / `WA_WORKER_API_KEY` / `WA_WEBHOOK_TOKEN`) and
-`outreach-be/src/services/whatsappSender.service.ts`. Replies and opt-out arrive on Courant's inbound
-webhook. Wiring into the send engine is P1 step 2.
+`outreach-be/src/services/whatsappSender.service.ts`; inbound replies and delivery status arrive on
+Courant's `/hooks/whatsapp` webhook, routed to the right project by the event's `sessionId`.

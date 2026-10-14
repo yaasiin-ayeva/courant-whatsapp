@@ -1,10 +1,11 @@
 /**
- * The WhatsApp session: a singleton wrapping one whatsapp-web.js client.
- * Owns the lifecycle (QR pairing, auto-reconnect with backoff), exposes the
- * humanised low-level send primitives, validates numbers, and forwards inbound
- * messages to Courant. It knows nothing about the queue or pacing — that lives
- * one layer up, so this stays a thin, testable transport.
+ * One WhatsApp session: a whatsapp-web.js client for a single number, plus its
+ * own durable outbound queue. Owns the lifecycle (QR pairing, auto-reconnect with
+ * backoff), the humanised send primitives, number validation, and forwarding
+ * inbound messages to Courant (tagged with this session's id). The SessionManager
+ * owns a set of these — one per paired number.
  */
+import path from 'node:path'
 import pkg from 'whatsapp-web.js'
 import type { Client as WAClient, Message } from 'whatsapp-web.js'
 import qrcode from 'qrcode'
@@ -13,13 +14,19 @@ import { env } from '../config/env'
 import { logger } from './logger'
 import { emit } from './webhook'
 import { invalidRecipient, notConnected, notOnWhatsApp } from './errors'
+import { Queue, Sender } from './queue'
 import { humanDelay, sleep } from '../utils/time'
 import { toChatId, toDigits } from '../utils/phone'
-import type { MediaPayload, SessionState, SessionStatus } from '../types'
+import type { MediaPayload, SessionState, SessionStatus, SessionSummary } from '../types'
 
 const { Client, MessageMedia } = pkg
 
-class WhatsAppSession {
+/** clientId / data-dir safe form of a session id. */
+export const safeId = (id: string): string => id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'default'
+
+export class Session implements Sender {
+  readonly id: string
+  readonly queue: Queue
   private client: WAClient
   private status: SessionStatus = 'disconnected'
   private lastQr: string | null = null
@@ -27,8 +34,11 @@ class WhatsAppSession {
   private reconnectDelayMs = 2_000
   private destroyed = false
 
-  constructor() {
-    this.client = new Client(buildClientConfig())
+  constructor(id: string) {
+    this.id = id
+    const cid = safeId(id)
+    this.client = new Client(buildClientConfig(cid))
+    this.queue = new Queue(id, path.join(env.dataDir, cid, 'queue.json'), this)
     this.wire()
   }
 
@@ -36,24 +46,24 @@ class WhatsAppSession {
     this.client.on('qr', (qr: string) => {
       this.lastQr = qr
       this.status = 'scanning'
-      logger.info('QR updated — scan it at GET /api/v1/session')
+      logger.info('QR updated', { session: this.id })
     })
-    this.client.on('authenticated', () => logger.info('authenticated'))
+    this.client.on('authenticated', () => logger.info('authenticated', { session: this.id }))
     this.client.on('ready', () => {
       this.status = 'connected'
       this.lastQr = null
       this.reconnectDelayMs = 2_000
-      const info = this.client.info
-      logger.info('ready', { phone: info?.wid?.user, pushName: info?.pushname })
+      logger.info('ready', { session: this.id, phone: this.client.info?.wid?.user, pushName: this.client.info?.pushname })
+      this.queue.kick()
     })
     this.client.on('auth_failure', (m: string) => {
       this.status = 'disconnected'
-      logger.error('auth failure', { message: m })
+      logger.error('auth failure', { session: this.id, message: m })
     })
     this.client.on('disconnected', (reason: string) => {
       this.status = 'disconnected'
       this.lastQr = null
-      logger.warn('disconnected', { reason })
+      logger.warn('disconnected', { session: this.id, reason })
       this.scheduleReconnect()
     })
     this.client.on('message', (msg: Message) => void this.onInbound(msg))
@@ -61,7 +71,7 @@ class WhatsAppSession {
 
   init(): void {
     this.client.initialize().catch((err) => {
-      logger.error('initialize failed', { error: (err as Error)?.message })
+      logger.error('initialize failed', { session: this.id, error: (err as Error)?.message })
       this.scheduleReconnect()
     })
   }
@@ -69,12 +79,12 @@ class WhatsAppSession {
   private scheduleReconnect(): void {
     if (this.destroyed) return
     const delay = this.reconnectDelayMs
-    this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, 60_000) // cap at 1 min
-    logger.info('reconnecting', { inMs: delay })
+    this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, 60_000)
+    logger.info('reconnecting', { session: this.id, inMs: delay })
     setTimeout(() => {
       if (this.destroyed) return
       this.client.initialize().catch((err) => {
-        logger.error('reconnect initialize failed', { error: (err as Error)?.message })
+        logger.error('reconnect failed', { session: this.id, error: (err as Error)?.message })
         this.scheduleReconnect()
       })
     }, delay)
@@ -85,6 +95,7 @@ class WhatsAppSession {
       if (msg.fromMe || msg.isStatus) return
       await emit({
         type: 'message.inbound',
+        sessionId: this.id,
         from: msg.from,
         to: msg.to,
         body: msg.body ?? '',
@@ -94,7 +105,7 @@ class WhatsAppSession {
         messageType: String(msg.type ?? 'unknown'),
       })
     } catch (err) {
-      logger.error('inbound handling failed', { error: (err as Error)?.message })
+      logger.error('inbound handling failed', { session: this.id, error: (err as Error)?.message })
     }
   }
 
@@ -102,21 +113,21 @@ class WhatsAppSession {
     return this.status === 'connected'
   }
 
-  async getState(): Promise<SessionState> {
-    const base: SessionState = {
-      status: this.status,
-      uptimeSeconds: Math.floor((Date.now() - this.startedAt) / 1000),
-    }
+  summary(): SessionSummary {
+    const s: SessionSummary = { id: this.id, status: this.status, uptimeSeconds: Math.floor((Date.now() - this.startedAt) / 1000) }
     if (this.status === 'connected') {
-      base.phone = this.client.info?.wid?.user
-      base.pushName = this.client.info?.pushname
-    } else if (this.status === 'scanning' && this.lastQr) {
-      base.qr = await qrcode.toDataURL(this.lastQr)
+      s.phone = this.client.info?.wid?.user
+      s.pushName = this.client.info?.pushname
     }
+    return s
+  }
+
+  async getState(): Promise<SessionState> {
+    const base: SessionState = { ...this.summary() }
+    if (this.status === 'scanning' && this.lastQr) base.qr = await qrcode.toDataURL(this.lastQr)
     return base
   }
 
-  /** Is this number reachable on WhatsApp? */
   async checkNumber(to: string): Promise<{ exists: boolean; waId?: string }> {
     if (!this.isReady()) throw notConnected()
     const digits = toDigits(to)
@@ -125,7 +136,6 @@ class WhatsAppSession {
     return id ? { exists: true, waId: id._serialized } : { exists: false }
   }
 
-  /** Resolve the chat id, validating the number first when configured. */
   private async resolveChatId(to: string): Promise<string> {
     const digits = toDigits(to)
     if (!digits) throw invalidRecipient(to)
@@ -139,21 +149,16 @@ class WhatsAppSession {
     return chatId
   }
 
-  /** Show presence + a length-scaled, jittered "typing…" before sending. */
   private async simulateTyping(chatId: string, textLength: number): Promise<void> {
     try {
       await this.client.sendPresenceAvailable()
       const chat = await this.client.getChatById(chatId)
       await chat.sendStateTyping()
-      const typingMs = Math.min(
-        env.typingMaxMs,
-        Math.max(env.typingMinMs, Math.round(textLength * env.typingPerCharMs + humanDelay(0, 800)))
-      )
+      const typingMs = Math.min(env.typingMaxMs, Math.max(env.typingMinMs, Math.round(textLength * env.typingPerCharMs + humanDelay(0, 800))))
       await sleep(typingMs)
       await chat.clearState()
     } catch (err) {
-      // Typing is best-effort; never block the actual send on it.
-      logger.debug('typing simulation skipped', { error: (err as Error)?.message })
+      logger.debug('typing simulation skipped', { session: this.id, error: (err as Error)?.message })
     }
   }
 
@@ -206,5 +211,3 @@ class WhatsAppSession {
     }
   }
 }
-
-export const session = new WhatsAppSession()

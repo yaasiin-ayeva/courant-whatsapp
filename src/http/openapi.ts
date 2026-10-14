@@ -1,29 +1,32 @@
 /**
  * OpenAPI 3.1 description of the worker API, served at GET /openapi.json and
- * rendered by Scalar at /docs. Kept hand-written (no decorators/generators) so
- * it stays small and dependency-free.
+ * rendered by Scalar at /docs. Hand-written (no generators) so it stays small.
+ *
+ * The worker is multi-session: one session per WhatsApp number, addressed by id
+ * (Courant uses the project id). Everything lives under /api/v1/sessions/{id}.
  */
 const jobStatus = ['queued', 'sending', 'sent', 'failed', 'held']
+const idParam = { name: 'id', in: 'path', required: true, schema: { type: 'string' }, description: 'Session id (Courant uses the project id).' }
 
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'Courant WhatsApp Worker API',
-    version: '1.0.0',
+    version: '2.0.0',
     description:
-      'A standalone WhatsApp transport built on whatsapp-web.js. Pairs one real ' +
-      'number (QR), sends outbound messages with human-like pacing through a durable ' +
-      'queue, and forwards inbound messages + delivery status to a signed webhook. ' +
-      'No vendor/BSP, no per-message cost.\n\n' +
-      '⚠️ Unofficial and against WhatsApp’s Terms of Service — use for low-volume, ' +
-      'opt-in / human-assisted messaging only.',
+      'A standalone, multi-session WhatsApp transport built on whatsapp-web.js. Each ' +
+      'session is one real number (paired by QR); send with human-like pacing through a ' +
+      'durable per-session queue, and receive inbound messages + delivery status on a ' +
+      'signed webhook (tagged with the session id). No vendor/BSP, no per-message cost.\n\n' +
+      '⚠️ Unofficial and against WhatsApp’s Terms of Service — low-volume, opt-in / ' +
+      'human-assisted messaging only.',
     license: { name: 'MIT' },
   },
   servers: [{ url: 'https://wa.yaasiin.dev', description: 'Production' }],
   security: [{ ApiKeyHeader: [] }, { BearerAuth: [] }],
   tags: [
-    { name: 'System', description: 'Liveness and metrics.' },
-    { name: 'Session', description: 'Pairing and the WhatsApp connection.' },
+    { name: 'System', description: 'Liveness and aggregate metrics.' },
+    { name: 'Sessions', description: 'One session per number: create, pair, inspect, remove.' },
     { name: 'Numbers', description: 'Check reachability on WhatsApp.' },
     { name: 'Messages', description: 'Queue messages and read their status.' },
   ],
@@ -32,90 +35,84 @@ export const openApiDocument = {
       get: {
         tags: ['System'],
         summary: 'Liveness',
-        description: 'Open, no auth. `ready` is true once a number is paired.',
+        description: 'Open, no auth. Reports how many sessions exist and how many are connected.',
         security: [],
         responses: {
-          200: {
-            description: 'Service is up.',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Health' } } },
-          },
+          200: { description: 'Service is up.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Health' } } } },
         },
       },
     },
-    '/api/v1/session': {
+    '/api/v1/sessions': {
       get: {
-        tags: ['Session'],
-        summary: 'Session status + QR',
-        description: 'While `status` is `scanning`, `qr` is a data-URL to scan from WhatsApp → Linked devices.',
+        tags: ['Sessions'],
+        summary: 'List sessions',
         responses: {
           200: {
-            description: 'Current session.',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/SessionState' } } },
+            description: 'Every session (no QR).',
+            content: { 'application/json': { schema: { type: 'object', properties: { sessions: { type: 'array', items: { $ref: '#/components/schemas/SessionSummary' } } } } } },
           },
           401: { $ref: '#/components/responses/Unauthorized' },
         },
       },
-    },
-    '/api/v1/session/logout': {
       post: {
-        tags: ['Session'],
-        summary: 'Unlink the number',
-        description: 'The next pairing needs a fresh QR scan.',
-        responses: { 200: { $ref: '#/components/responses/Ok' }, 401: { $ref: '#/components/responses/Unauthorized' } },
-      },
-    },
-    '/api/v1/session/restart': {
-      post: {
-        tags: ['Session'],
-        summary: 'Restart the client',
-        responses: { 200: { $ref: '#/components/responses/Ok' }, 401: { $ref: '#/components/responses/Unauthorized' } },
-      },
-    },
-    '/api/v1/numbers/check': {
-      post: {
-        tags: ['Numbers'],
-        summary: 'Is a number on WhatsApp?',
+        tags: ['Sessions'],
+        summary: 'Create (or get) a session',
+        description: 'Idempotent. Creates the session if new and starts pairing; returns its state (with a QR while scanning).',
         requestBody: {
           required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['phone'],
-                properties: { phone: { type: 'string', example: '+22890000000' } },
-              },
-            },
-          },
+          content: { 'application/json': { schema: { type: 'object', required: ['id'], properties: { id: { type: 'string', example: 'project_64f…' } } } } },
         },
         responses: {
-          200: {
-            description: 'Lookup result.',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    phone: { type: 'string', example: '+22890000000' },
-                    exists: { type: 'boolean' },
-                    waId: { type: 'string', example: '22890000000@c.us' },
-                  },
-                },
-              },
-            },
-          },
+          201: { description: 'Session state.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SessionState' } } } },
           400: { $ref: '#/components/responses/BadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
         },
       },
     },
-    '/api/v1/messages': {
+    '/api/v1/sessions/{id}': {
+      get: {
+        tags: ['Sessions'],
+        summary: 'Session status + QR',
+        parameters: [idParam],
+        responses: {
+          200: { description: 'Session state.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SessionState' } } } },
+          404: { $ref: '#/components/responses/NotFound' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+      delete: {
+        tags: ['Sessions'],
+        summary: 'Remove a session',
+        description: 'Unlinks the number and deletes its persisted session + queue.',
+        parameters: [idParam],
+        responses: { 200: { $ref: '#/components/responses/Ok' }, 404: { $ref: '#/components/responses/NotFound' }, 401: { $ref: '#/components/responses/Unauthorized' } },
+      },
+    },
+    '/api/v1/sessions/{id}/logout': {
+      post: { tags: ['Sessions'], summary: 'Unlink the number (keep the session)', parameters: [idParam], responses: { 200: { $ref: '#/components/responses/Ok' }, 404: { $ref: '#/components/responses/NotFound' } } },
+    },
+    '/api/v1/sessions/{id}/restart': {
+      post: { tags: ['Sessions'], summary: 'Restart the client', parameters: [idParam], responses: { 200: { $ref: '#/components/responses/Ok' }, 404: { $ref: '#/components/responses/NotFound' } } },
+    },
+    '/api/v1/sessions/{id}/numbers/check': {
+      post: {
+        tags: ['Numbers'],
+        summary: 'Is a number on WhatsApp?',
+        parameters: [idParam],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['phone'], properties: { phone: { type: 'string', example: '+22890000000' } } } } } },
+        responses: {
+          200: { description: 'Lookup result.', content: { 'application/json': { schema: { type: 'object', properties: { phone: { type: 'string' }, exists: { type: 'boolean' }, waId: { type: 'string' } } } } } },
+          400: { $ref: '#/components/responses/BadRequest' },
+          404: { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/api/v1/sessions/{id}/messages': {
       post: {
         tags: ['Messages'],
         summary: 'Queue a message',
-        description:
-          'Returns immediately with a job id (the worker paces the actual send). Poll ' +
-          '`GET /api/v1/messages/{id}` or rely on the `message.status` webhook. Provide ' +
-          'either `text` (alias `message`) or a `media` object.',
+        description: 'Returns a job id immediately (the session paces the send). Poll the job or wait for the `message.status` webhook. Provide `text` (alias `message`) or a `media` object.',
+        parameters: [idParam],
         requestBody: {
           required: true,
           content: {
@@ -129,56 +126,35 @@ export const openApiDocument = {
           },
         },
         responses: {
-          202: {
-            description: 'Queued.',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: { id: { type: 'string', example: 'msg_9f3a1c...' }, status: { type: 'string', enum: jobStatus } },
-                },
-              },
-            },
-          },
+          202: { description: 'Queued.', content: { 'application/json': { schema: { type: 'object', properties: { id: { type: 'string', example: 'msg_9f3a…' }, status: { type: 'string', enum: jobStatus } } } } } },
           400: { $ref: '#/components/responses/BadRequest' },
-          401: { $ref: '#/components/responses/Unauthorized' },
-        },
-      },
-    },
-    '/api/v1/messages/{id}': {
-      get: {
-        tags: ['Messages'],
-        summary: 'Job status',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: {
-          200: {
-            description: 'The job.',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/JobView' } } },
-          },
-          401: { $ref: '#/components/responses/Unauthorized' },
           404: { $ref: '#/components/responses/NotFound' },
         },
       },
     },
-    '/api/v1/metrics': {
+    '/api/v1/sessions/{id}/messages/{jobId}': {
       get: {
-        tags: ['System'],
-        summary: 'Queue + send metrics',
+        tags: ['Messages'],
+        summary: 'Job status',
+        parameters: [idParam, { name: 'jobId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
-          200: {
-            description: 'Counters.',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Metrics' } } },
-          },
-          401: { $ref: '#/components/responses/Unauthorized' },
+          200: { description: 'The job.', content: { 'application/json': { schema: { $ref: '#/components/schemas/JobView' } } } },
+          404: { $ref: '#/components/responses/NotFound' },
         },
       },
+    },
+    '/api/v1/sessions/{id}/metrics': {
+      get: { tags: ['System'], summary: 'Queue metrics for a session', parameters: [idParam], responses: { 200: { description: 'Counters.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Metrics' } } } }, 404: { $ref: '#/components/responses/NotFound' } } },
+    },
+    '/api/v1/metrics': {
+      get: { tags: ['System'], summary: 'Aggregate across sessions', responses: { 200: { description: 'Totals.', content: { 'application/json': { schema: { type: 'object', properties: { sessions: { type: 'integer' }, connected: { type: 'integer' } } } } } } } },
     },
   },
   webhooks: {
     'message.inbound': {
       post: {
         summary: 'Inbound message',
-        description: 'POSTed to `COURANT_WEBHOOK_URL`, signed `X-Signature: sha256=<hmac>` and `X-Token`.',
+        description: 'POSTed to `COURANT_WEBHOOK_URL`, signed `X-Signature: sha256=<hmac>` and `X-Token`. Carries the `sessionId`.',
         requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/WebhookInbound' } } } },
         responses: { 200: { description: 'Acknowledged.' } },
       },
@@ -204,27 +180,27 @@ export const openApiDocument = {
     },
     schemas: {
       Error: { type: 'object', properties: { error: { type: 'string' } } },
-      Health: { type: 'object', properties: { ok: { type: 'boolean' }, ready: { type: 'boolean' } } },
-      SessionState: {
+      Health: { type: 'object', properties: { ok: { type: 'boolean' }, sessions: { type: 'integer' }, connected: { type: 'integer' }, ready: { type: 'boolean' } } },
+      SessionSummary: {
         type: 'object',
         properties: {
+          id: { type: 'string' },
           status: { type: 'string', enum: ['disconnected', 'scanning', 'connected'] },
-          phone: { type: 'string', description: 'Paired number (digits), when connected.' },
+          phone: { type: 'string' },
           pushName: { type: 'string' },
-          qr: { type: 'string', description: 'data-URL QR, present while scanning.' },
           uptimeSeconds: { type: 'integer' },
         },
+      },
+      SessionState: {
+        allOf: [
+          { $ref: '#/components/schemas/SessionSummary' },
+          { type: 'object', properties: { qr: { type: 'string', description: 'data-URL QR, present while scanning.' } } },
+        ],
       },
       MediaPayload: {
         type: 'object',
         description: 'One of url or base64 is required.',
-        properties: {
-          url: { type: 'string' },
-          base64: { type: 'string' },
-          mimetype: { type: 'string' },
-          filename: { type: 'string' },
-          caption: { type: 'string' },
-        },
+        properties: { url: { type: 'string' }, base64: { type: 'string' }, mimetype: { type: 'string' }, filename: { type: 'string' }, caption: { type: 'string' } },
       },
       SendRequest: {
         type: 'object',
@@ -264,6 +240,7 @@ export const openApiDocument = {
         type: 'object',
         properties: {
           type: { const: 'message.inbound' },
+          sessionId: { type: 'string' },
           from: { type: 'string', example: '22890000000@c.us' },
           to: { type: 'string' },
           body: { type: 'string' },
@@ -278,6 +255,7 @@ export const openApiDocument = {
         type: 'object',
         properties: {
           type: { const: 'message.status' },
+          sessionId: { type: 'string' },
           jobId: { type: 'string' },
           status: { type: 'string', enum: ['sent', 'failed'] },
           to: { type: 'string' },

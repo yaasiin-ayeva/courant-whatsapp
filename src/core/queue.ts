@@ -1,24 +1,30 @@
 /**
- * Durable, human-paced outbound queue.
+ * Durable, human-paced outbound queue — one instance per session.
  *
  * Jobs are persisted to disk so a restart never drops a message, and are drained
  * one at a time with: a daily cap + optional warm-up ramp, an optional quiet-hours
  * window, a per-recipient minimum gap, a randomised human delay between sends, and
  * bounded retries. Each terminal job stays queryable (and idempotent by
- * idempotencyKey) for WA_JOB_TTL_MS. This is the only thing that calls the session's
- * send primitives, so pacing is enforced in exactly one place.
+ * idempotencyKey) for WA_JOB_TTL_MS. This is the only thing that calls a session's
+ * send primitives, so pacing is enforced in exactly one place per number.
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { env } from '../config/env'
 import { logger } from './logger'
-import { session } from './session'
 import { emit } from './webhook'
 import { SendError } from './errors'
 import { toE164 } from '../utils/phone'
 import { dayKeyInTz, hourInTz, humanDelay, sleep } from '../utils/time'
 import { randomId } from '../utils/hmac'
-import type { Job, JobView, SendRequest } from '../types'
+import type { Job, JobView, MediaPayload, SendRequest } from '../types'
+
+/** What the queue needs from its session to deliver a job. */
+export interface Sender {
+  isReady(): boolean
+  sendText(to: string, text: string): Promise<{ waId: string }>
+  sendMedia(to: string, media: MediaPayload): Promise<{ waId: string }>
+}
 
 interface Persisted {
   jobs: Job[]
@@ -38,58 +44,61 @@ const toView = (j: Job): JobView => ({
   updatedAt: new Date(j.updatedAt).toISOString(),
 })
 
-class Queue {
+const isTerminal = (s: string): boolean => s === 'sent' || s === 'failed'
+
+function daysBetween(fromKey: string, toKey: string): number {
+  const a = Date.parse(`${fromKey}T00:00:00Z`)
+  const b = Date.parse(`${toKey}T00:00:00Z`)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0
+  return Math.round((b - a) / (24 * 60 * 60 * 1000))
+}
+
+export class Queue {
   private jobs: Job[] = []
   private sentByDay: Record<string, number> = {}
   private firstDay: string | null = null
   private lastSentToRecipient: Record<string, number> = {}
   private draining = false
-  private readonly file: string
 
-  constructor() {
-    this.file = path.join(env.dataDir, 'queue.json')
+  constructor(
+    private readonly sessionId: string,
+    private readonly file: string,
+    private readonly sender: Sender
+  ) {
     this.load()
   }
 
   // ── persistence ────────────────────────────────────────────────────────────
   private load(): void {
     try {
-      fs.mkdirSync(env.dataDir, { recursive: true })
-      const raw = fs.readFileSync(this.file, 'utf8')
-      const data = JSON.parse(raw) as Partial<Persisted>
+      fs.mkdirSync(path.dirname(this.file), { recursive: true })
+      const data = JSON.parse(fs.readFileSync(this.file, 'utf8')) as Partial<Persisted>
       this.jobs = Array.isArray(data.jobs) ? data.jobs : []
       this.sentByDay = data.sentByDay ?? {}
       this.firstDay = data.firstDay ?? null
       this.lastSentToRecipient = data.lastSentToRecipient ?? {}
-      // A job caught mid-send by a crash is safe to retry.
       for (const j of this.jobs) if (j.status === 'sending' || j.status === 'held') j.status = 'queued'
-      logger.info('queue loaded', { jobs: this.jobs.length })
+      logger.info('queue loaded', { session: this.sessionId, jobs: this.jobs.length })
     } catch {
-      logger.info('queue starting empty')
+      logger.info('queue starting empty', { session: this.sessionId })
     }
   }
 
   private save(): void {
-    const data: Persisted = {
-      jobs: this.jobs,
-      sentByDay: this.sentByDay,
-      firstDay: this.firstDay,
-      lastSentToRecipient: this.lastSentToRecipient,
-    }
+    const data: Persisted = { jobs: this.jobs, sentByDay: this.sentByDay, firstDay: this.firstDay, lastSentToRecipient: this.lastSentToRecipient }
     const tmp = `${this.file}.tmp`
     try {
       fs.writeFileSync(tmp, JSON.stringify(data))
       fs.renameSync(tmp, this.file)
     } catch (err) {
-      logger.error('queue save failed', { error: (err as Error)?.message })
+      logger.error('queue save failed', { session: this.sessionId, error: (err as Error)?.message })
     }
   }
 
   private prune(): void {
     const cutoff = Date.now() - env.jobTtlMs
     this.jobs = this.jobs.filter((j) => !isTerminal(j.status) || j.updatedAt >= cutoff)
-    for (const [k, t] of Object.entries(this.lastSentToRecipient))
-      if (t < Date.now() - 24 * 60 * 60 * 1000) delete this.lastSentToRecipient[k]
+    for (const [k, t] of Object.entries(this.lastSentToRecipient)) if (t < Date.now() - 24 * 60 * 60 * 1000) delete this.lastSentToRecipient[k]
   }
 
   // ── public API ─────────────────────────────────────────────────────────────
@@ -99,15 +108,7 @@ class Queue {
       if (existing) return existing
     }
     const now = Date.now()
-    const job: Job = {
-      ...req,
-      id: randomId('msg_'),
-      toE164: toE164(req.to) || req.to,
-      status: 'queued',
-      attempts: 0,
-      createdAt: now,
-      updatedAt: now,
-    }
+    const job: Job = { ...req, id: randomId('msg_'), toE164: toE164(req.to) || req.to, status: 'queued', attempts: 0, createdAt: now, updatedAt: now }
     this.jobs.push(job)
     this.save()
     void this.drain()
@@ -136,14 +137,17 @@ class Queue {
     }
   }
 
+  kick(): void {
+    void this.drain()
+  }
+
   // ── pacing policy ──────────────────────────────────────────────────────────
   private effectiveCap(): number {
     let cap = env.dailyCap > 0 ? env.dailyCap : Number.POSITIVE_INFINITY
     if (env.warmupEnabled) {
       const start = this.firstDay ?? dayKeyInTz(env.tz)
       const dayIndex = Math.max(0, daysBetween(start, dayKeyInTz(env.tz)))
-      const warmCap = Math.round(env.warmupStart * Math.pow(env.warmupGrowth, dayIndex))
-      cap = Math.min(cap, warmCap)
+      cap = Math.min(cap, Math.round(env.warmupStart * Math.pow(env.warmupGrowth, dayIndex)))
     }
     return cap
   }
@@ -159,49 +163,41 @@ class Queue {
 
   private recipientWaitMs(toE164Key: string): number {
     const last = this.lastSentToRecipient[toE164Key]
-    if (!last) return 0
-    return Math.max(0, env.perRecipientMinMs - (Date.now() - last))
+    return last ? Math.max(0, env.perRecipientMinMs - (Date.now() - last)) : 0
   }
 
-  // ── drain loop ─────────────────────────────────────────────────────────────
   private nextQueued(): Job | undefined {
-    return this.jobs
-      .filter((j) => j.status === 'queued')
-      .sort((a, b) => a.createdAt - b.createdAt)[0]
+    return this.jobs.filter((j) => j.status === 'queued').sort((a, b) => a.createdAt - b.createdAt)[0]
   }
 
   private async drain(): Promise<void> {
     if (this.draining) return
     this.draining = true
     try {
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
+      for (;;) {
         const job = this.nextQueued()
         if (!job) break
-
-        if (!session.isReady()) {
+        if (!this.sender.isReady()) {
           await sleep(15_000)
           continue
         }
         if (!this.inWindow()) {
           job.status = 'held'
           this.save()
-          await sleep(60_000) // re-check whether the window has opened
+          await sleep(60_000)
           job.status = 'queued'
           continue
         }
         if (this.capReached()) {
           job.status = 'held'
           this.save()
-          await sleep(5 * 60_000) // cap hit — wait for the next day
+          await sleep(5 * 60_000)
           job.status = 'queued'
           continue
         }
         const wait = this.recipientWaitMs(job.toE164)
         if (wait > 0) await sleep(Math.min(wait, env.perRecipientMinMs))
-
         await this.process(job)
-
         if (this.nextQueued()) await sleep(humanDelay(env.sendMinMs, env.sendMaxMs))
       }
       this.prune()
@@ -217,10 +213,7 @@ class Queue {
     job.updatedAt = Date.now()
     this.save()
     try {
-      const result =
-        job.kind === 'media' && job.media
-          ? await session.sendMedia(job.toE164, job.media)
-          : await session.sendText(job.toE164, job.text ?? '')
+      const result = job.kind === 'media' && job.media ? await this.sender.sendMedia(job.toE164, job.media) : await this.sender.sendText(job.toE164, job.text ?? '')
       job.status = 'sent'
       job.waId = result.waId
       job.updatedAt = Date.now()
@@ -229,8 +222,8 @@ class Queue {
       if (!this.firstDay) this.firstDay = day
       this.lastSentToRecipient[job.toE164] = Date.now()
       this.save()
-      logger.info('sent', { id: job.id, to: job.toE164, waId: job.waId })
-      void emit({ type: 'message.status', jobId: job.id, status: 'sent', to: job.toE164, waId: job.waId })
+      logger.info('sent', { session: this.sessionId, id: job.id, to: job.toE164, waId: job.waId })
+      void emit({ type: 'message.status', sessionId: this.sessionId, jobId: job.id, status: 'sent', to: job.toE164, waId: job.waId })
     } catch (err) {
       const e = err as SendError
       const retryable = e instanceof SendError ? e.retryable : true
@@ -239,32 +232,16 @@ class Queue {
         job.error = e.message
         job.updatedAt = Date.now()
         this.save()
-        logger.warn('send failed, will retry', { id: job.id, attempt: job.attempts, error: e.message })
+        logger.warn('send failed, will retry', { session: this.sessionId, id: job.id, attempt: job.attempts, error: e.message })
         await sleep(job.attempts * 5_000)
       } else {
         job.status = 'failed'
         job.error = e.message
         job.updatedAt = Date.now()
         this.save()
-        logger.error('send failed, giving up', { id: job.id, error: e.message })
-        void emit({ type: 'message.status', jobId: job.id, status: 'failed', to: job.toE164, error: e.message })
+        logger.error('send failed, giving up', { session: this.sessionId, id: job.id, error: e.message })
+        void emit({ type: 'message.status', sessionId: this.sessionId, jobId: job.id, status: 'failed', to: job.toE164, error: e.message })
       }
     }
   }
-
-  /** Called on boot once the session is up, to resume any backlog. */
-  kick(): void {
-    void this.drain()
-  }
 }
-
-const isTerminal = (s: string): boolean => s === 'sent' || s === 'failed'
-
-function daysBetween(fromKey: string, toKey: string): number {
-  const a = Date.parse(`${fromKey}T00:00:00Z`)
-  const b = Date.parse(`${toKey}T00:00:00Z`)
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0
-  return Math.round((b - a) / (24 * 60 * 60 * 1000))
-}
-
-export const queue = new Queue()

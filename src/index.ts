@@ -9,8 +9,7 @@
  */
 import { env, validateEnv } from './config/env'
 import { logger } from './core/logger'
-import { session } from './core/session'
-import { queue } from './core/queue'
+import { manager } from './core/manager'
 import { buildApp } from './http/server'
 
 function main(): void {
@@ -22,8 +21,8 @@ function main(): void {
     webhook: Boolean(env.webhookUrl),
   })
 
-  session.init()
-  queue.kick()
+  // Recreate every paired number's session and resume its queue.
+  manager.initAll()
 
   const app = buildApp()
   const server = app.listen(env.port, () => logger.info(`listening on :${env.port}`))
@@ -31,7 +30,7 @@ function main(): void {
   const shutdown = async (signal: string) => {
     logger.info('shutting down', { signal })
     server.close()
-    await session.shutdown()
+    await manager.shutdownAll()
     process.exit(0)
   }
   process.on('SIGTERM', () => void shutdown('SIGTERM'))

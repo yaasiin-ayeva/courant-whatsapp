@@ -4,7 +4,7 @@ import { apiKeyAuth, rateLimit } from './auth'
 import { v1 } from './routes'
 import { openApiDocument } from './openapi'
 import { docsHtml, landingHtml } from './pages'
-import { session } from '../core/session'
+import { manager } from '../core/manager'
 import { logger } from '../core/logger'
 
 export function buildApp(): Application {
@@ -17,9 +17,15 @@ export function buildApp(): Application {
     next()
   })
 
-  // Liveness — open, no auth, cheap. Reports readiness too.
+  // Liveness — open, no auth, cheap. Reports how many sessions are connected.
   app.get('/health', (_req, res) => {
-    res.json({ ok: true, ready: session.isReady() })
+    const sessions = manager.list()
+    res.json({
+      ok: true,
+      sessions: sessions.length,
+      connected: sessions.filter((s) => s.status === 'connected').length,
+      ready: sessions.some((s) => s.status === 'connected'),
+    })
   })
 
   // Public landing + interactive API docs (Scalar) + the OpenAPI spec.

@@ -1,12 +1,23 @@
 export type SessionStatus = 'disconnected' | 'scanning' | 'connected'
 
 export interface SessionState {
+  /** The session id (one per paired number; Courant uses the project id). */
+  id: string
   status: SessionStatus
   /** The paired number (digits), once connected. */
   phone?: string
   pushName?: string
   /** data-URL QR to scan, present while status is 'scanning'. */
   qr?: string
+  uptimeSeconds: number
+}
+
+/** A session in a list (no QR). */
+export interface SessionSummary {
+  id: string
+  status: SessionStatus
+  phone?: string
+  pushName?: string
   uptimeSeconds: number
 }
 
@@ -59,6 +70,7 @@ export interface JobView {
 export type WebhookEvent =
   | {
       type: 'message.inbound'
+      sessionId: string
       from: string
       to: string
       body: string
@@ -69,6 +81,7 @@ export type WebhookEvent =
     }
   | {
       type: 'message.status'
+      sessionId: string
       jobId: string
       status: Extract<JobStatus, 'sent' | 'failed'>
       to: string

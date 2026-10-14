@@ -39,8 +39,7 @@ export const env = {
   /** Shared secret used to sign the webhook body (HMAC-SHA256, header X-Signature). */
   webhookToken: str('WA_WEBHOOK_TOKEN'),
 
-  /** whatsapp-web.js session. */
-  clientId: str('WA_CLIENT_ID', 'courant'),
+  /** whatsapp-web.js session storage (one subfolder per session id). */
   sessionDir: str('SESSION_DIR', './.wwebjs_auth'),
   /** Durable queue + bookkeeping live here (mount a volume). */
   dataDir: str('DATA_DIR', './data'),

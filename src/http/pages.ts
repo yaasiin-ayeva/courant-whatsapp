@@ -24,7 +24,7 @@ export const landingHtml = `<!doctype html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Courant WhatsApp Worker</title>
-  <meta name="description" content="Standalone WhatsApp transport for Courant — self-hosted, no vendor, HTTP API." />
+  <meta name="description" content="Standalone multi-session WhatsApp transport for Courant — self-hosted, no vendor, HTTP API." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
   <style>
     :root { --bg:#0b0f10; --panel:#11181a; --line:#1f2a2d; --fg:#e6edf0; --muted:#8aa0a6; --accent:#25d366; --accent-2:#128c7e; }
@@ -59,9 +59,10 @@ export const landingHtml = `<!doctype html>
   <div class="wrap">
     <span class="badge"><span id="dot" class="dot"></span><span id="state">checking…</span></span>
     <h1>Courant <span class="mark">WhatsApp</span> Worker</h1>
-    <p class="lead">A standalone WhatsApp transport built on whatsapp-web.js. Pairs one real
-      number, sends with human-like pacing through a durable queue, and forwards replies to a
-      signed webhook. No vendor, no BSP, no per-message cost.</p>
+    <p class="lead">A standalone, <strong>multi-session</strong> WhatsApp transport built on
+      whatsapp-web.js. Pair several numbers at once — each sends with human-like pacing through
+      its own durable queue, and forwards replies to a signed webhook. No vendor, no BSP, no
+      per-message cost.</p>
 
     <div class="row">
       <a class="btn primary" href="/docs">API Reference →</a>
@@ -70,12 +71,12 @@ export const landingHtml = `<!doctype html>
     </div>
 
     <div class="grid">
-      <div class="card"><h3>Async API</h3><p>Queue a message, get a job id, poll status or receive a webhook.</p></div>
-      <div class="card"><h3>Durable + paced</h3><p>Survives restarts; typing simulation, caps, warm-up and per-recipient gaps.</p></div>
-      <div class="card"><h3>Key auth</h3><p>Every call carries <code>X-API-Key</code>. Pair once via QR, session persists.</p></div>
+      <div class="card"><h3>Multi-session</h3><p>Many numbers in one worker, each addressed by id (Courant uses the project id).</p></div>
+      <div class="card"><h3>Durable + paced</h3><p>Per-session queue survives restarts; typing simulation, caps, warm-up, per-recipient gaps.</p></div>
+      <div class="card"><h3>Async + signed</h3><p>Queue a message, get a job id, poll or receive an HMAC-signed webhook. <code>X-API-Key</code> on every call.</p></div>
     </div>
 
-    <pre><code>curl -X POST https://wa.yaasiin.dev/api/v1/messages \\
+    <pre><code>curl -X POST https://wa.yaasiin.dev/api/v1/sessions/<span class="tok">&lt;id&gt;</span>/messages \\
   -H "<span class="tok">X-API-Key</span>: wa_your_key" -H "Content-Type: application/json" \\
   -d '{ "to": "+22890000000", "text": "Hello 👋" }'</code></pre>
 
@@ -92,8 +93,10 @@ export const landingHtml = `<!doctype html>
   <script>
     fetch('/health').then(function (r) { return r.json() }).then(function (d) {
       var dot = document.getElementById('dot'), st = document.getElementById('state')
-      if (d.ready) { dot.className = 'dot ok'; st.textContent = 'Connected' }
-      else { dot.className = 'dot off'; st.textContent = 'Not paired' }
+      var n = d.sessions || 0, c = d.connected || 0
+      if (n === 0) { dot.className = 'dot off'; st.textContent = 'No sessions yet' }
+      else if (c > 0) { dot.className = 'dot ok'; st.textContent = c + ' / ' + n + ' number' + (n > 1 ? 's' : '') + ' connected' }
+      else { dot.className = 'dot off'; st.textContent = n + ' session' + (n > 1 ? 's' : '') + ' · none connected' }
     }).catch(function () {
       document.getElementById('dot').className = 'dot off'
       document.getElementById('state').textContent = 'Unreachable'

@@ -6,7 +6,7 @@ export const docsHtml = `<!doctype html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Courant WhatsApp API — Reference</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2318a558'/%3E%3Cpath d='M7 20.5c3-5.5 6-5.5 9 0s6 5.5 9 0' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d7a43'/%3E%3Cpath d='M21.6 11.1a7 7 0 1 0 0 9.8' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='22.3' cy='16' r='2.1' fill='%23fff'/%3E%3C/svg%3E" />
 </head>
 <body>
   <script id="api-reference" data-url="/openapi.json"></script>
@@ -25,12 +25,12 @@ export const landingHtml = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Courant WhatsApp API — self-hosted WhatsApp messaging, no BSP</title>
   <meta name="description" content="A multi-session WhatsApp API you can self-host. Pair your own numbers, send with human-like pacing, receive replies on a signed webhook. No BSP, no per-message fees." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2318a558'/%3E%3Cpath d='M7 20.5c3-5.5 6-5.5 9 0s6 5.5 9 0' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d7a43'/%3E%3Cpath d='M21.6 11.1a7 7 0 1 0 0 9.8' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='22.3' cy='16' r='2.1' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
-    :root{--bg:#f6f5f2;--card:#ffffff;--ink:#0f1113;--muted:#6b7280;--soft:#9aa1ab;--line:#e7e5df;--line2:#dcdad2;--pill:#efeee9;--accent:#18a558;--accent-dk:#128a49;--accent-soft:#e7f6ee;--warn-bg:#fff7e6;--warn-line:#f0d79a;--warn-ink:#8a6414;--radius:18px}
+    :root{--bg:#f6f5f2;--card:#ffffff;--ink:#0f1113;--muted:#6b7280;--soft:#9aa1ab;--line:#e7e5df;--line2:#dcdad2;--pill:#efeee9;--accent:#0d7a43;--accent-dk:#0a5630;--accent-soft:#e8f2ea;--warn-bg:#fff7e6;--warn-line:#f0d79a;--warn-ink:#8a6414;--radius:18px}
     *{box-sizing:border-box}
     html{scroll-behavior:smooth}
     body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:16px;line-height:1.6;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
@@ -61,7 +61,7 @@ export const landingHtml = `<!doctype html>
     .dot{width:8px;height:8px;border-radius:50%;background:var(--soft)}
     .dot.ok{background:var(--accent);animation:pulse 2s infinite}
     .dot.off{background:#e0624a}
-    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(24,165,88,.45)}70%{box-shadow:0 0 0 7px rgba(24,165,88,0)}100%{box-shadow:0 0 0 0 rgba(24,165,88,0)}}
+    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(13,122,67,.45)}70%{box-shadow:0 0 0 7px rgba(13,122,67,0)}100%{box-shadow:0 0 0 0 rgba(13,122,67,0)}}
     h1{font-size:clamp(40px,7.5vw,74px);line-height:1.02;letter-spacing:-.035em;font-weight:800;margin:24px auto 18px;max-width:14ch}
     .mark{color:var(--accent)}
     .sub{color:var(--muted);font-size:clamp(17px,2.3vw,21px);max-width:58ch;margin:0 auto 26px}
@@ -90,7 +90,7 @@ export const landingHtml = `<!doctype html>
     .step:before{counter-increment:s;content:counter(s);display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:var(--accent);color:#fff;font-weight:800;font-size:18px;margin-bottom:14px}
     .step h3{margin:0 0 7px;font-size:17px;font-weight:700}.step p{margin:0;color:var(--muted);font-size:15px}
     pre{background:#0f1113;border-radius:16px;padding:22px;overflow:auto;font:14px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;color:#d9e7df;box-shadow:0 12px 30px rgba(16,17,19,.12)}
-    .tok{color:#49d08a}
+    .tok{color:#46b87b}
     /* form */
     .formwrap{display:grid;grid-template-columns:1.05fr .95fr;gap:38px;align-items:start}
     @media(max-width:820px){.formwrap{grid-template-columns:1fr}}
@@ -118,7 +118,7 @@ export const landingHtml = `<!doctype html>
 </head>
 <body>
   <header class="nav"><div class="wrap">
-    <a class="brand" href="/"><svg class="m" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#18a558"/><stop offset="1" stop-color="#49d08a"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><path d="M7 20.5c3-5.5 6-5.5 9 0s6 5.5 9 0" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>courant<span class="tag">WhatsApp API</span></a>
+    <a class="brand" href="/"><svg class="m" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#0f7a44"/><stop offset="1" stop-color="#0a5630"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><path d="M21.6 11.1a7 7 0 1 0 0 9.8" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/><circle cx="22.3" cy="16" r="2.1" fill="#fff"/></svg>courant<span class="tag">WhatsApp API</span></a>
     <nav>
       <a class="hide" href="#features">Features</a>
       <a class="hide" href="#how">How it works</a>
@@ -222,6 +222,7 @@ export const landingHtml = `<!doctype html>
     <a href="/openapi.json">OpenAPI</a>
     <a href="/health">Status</a>
     <a href="https://github.com/yaasiin-ayeva/courant-whatsapp" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://yaasiin.dev" target="_blank" rel="noopener" style="margin-left:auto;font-weight:600">Powered by yaasiin.dev</a>
   </div></footer>
 
   <script>

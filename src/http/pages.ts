@@ -35,6 +35,23 @@ export const landingHtml = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Courant WhatsApp API — self-hosted WhatsApp messaging, no BSP</title>
   <meta name="description" content="A multi-session WhatsApp API you can self-host. Pair your own numbers, send with human-like pacing, receive replies on a signed webhook. No BSP, no per-message fees." />
+  <link rel="canonical" href="https://wa.yaasiin.dev/" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="Courant" />
+  <meta name="theme-color" content="#0d7a43" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0b100e" media="(prefers-color-scheme: dark)" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Courant WhatsApp API" />
+  <meta property="og:title" content="Courant WhatsApp API — self-hosted WhatsApp messaging, no BSP" />
+  <meta property="og:description" content="Pair your own numbers, send with human-like pacing, receive replies on a signed webhook. Multi-session, self-hosted, no per-message fees." />
+  <meta property="og:url" content="https://wa.yaasiin.dev/" />
+  <meta property="og:image" content="https://wa.yaasiin.dev/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Courant WhatsApp API — self-hosted WhatsApp messaging" />
+  <meta name="twitter:description" content="Self-hosted, multi-session WhatsApp API. No BSP, no per-message fees." />
+  <meta name="twitter:image" content="https://wa.yaasiin.dev/og.jpg" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d7a43'/%3E%3Cpath d='M21.6 11.1a7 7 0 1 0 0 9.8' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='22.3' cy='16' r='2.1' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -166,6 +183,7 @@ export const landingHtml = `<!doctype html>
     footer .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center}
     footer a{color:var(--muted);text-decoration:none}footer a:hover{color:var(--ink)}
   </style>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Courant WhatsApp API","applicationCategory":"BusinessApplication","operatingSystem":"Cloud, Self-hosted","description":"Self-hosted, multi-session WhatsApp API. Pair your own numbers, send with human-like pacing, receive replies on a signed webhook. No BSP, no per-message fees.","url":"https://wa.yaasiin.dev/","image":"https://wa.yaasiin.dev/og.jpg","offers":[{"@type":"Offer","name":"Starter","price":"9","priceCurrency":"USD"},{"@type":"Offer","name":"Pro","price":"29","priceCurrency":"USD"}]}</script>
 </head>
 <body>
   <header class="nav"><div class="wrap">

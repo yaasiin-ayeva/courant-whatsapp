@@ -80,7 +80,7 @@ export const landingHtml = `<!doctype html>
     .brand .tag{color:var(--accent-dk);background:var(--accent-soft);font-weight:700;font-size:11px;padding:3px 9px;border-radius:999px;letter-spacing:.01em}
     @media(max-width:560px){.brand .tag{display:none}}
     .nav nav{margin-left:auto;display:flex;align-items:center;gap:26px}
-    .nav nav a{color:#3a3f46;text-decoration:none;font-size:15px;font-weight:500}
+    .nav nav a{color:var(--muted);text-decoration:none;font-size:15px;font-weight:500}
     .nav nav a:hover{color:var(--ink)}
     .btn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;font-weight:700;font-size:15px;padding:11px 18px;border-radius:12px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;transition:.15s}
     .btn:hover{opacity:.88}
@@ -106,7 +106,7 @@ export const landingHtml = `<!doctype html>
     .inputrow input{flex:1;border:none;outline:none;background:transparent;font:inherit;font-size:16px;color:var(--ink);padding:0 10px}
     .inputrow input::placeholder{color:var(--soft)}
     .inputrow button{white-space:nowrap}
-    .pills{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:18px auto 0;color:#4b5159;font-size:14px}
+    .pills{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:18px auto 0;color:var(--muted);font-size:14px}
     .pill{background:var(--pill);border-radius:999px;padding:8px 15px}
     .pill b{color:var(--ink);font-weight:700}
     /* sections */
@@ -138,7 +138,7 @@ export const landingHtml = `<!doctype html>
     .plan .price small{font-size:15px;font-weight:600;color:var(--soft);letter-spacing:0}
     .plan .local{font-size:12.5px;color:var(--soft);margin-top:7px;min-height:15px;font-weight:600}
     .plan ul{list-style:none;padding:0;margin:20px 0 24px;flex:1}
-    .plan li{position:relative;padding-left:27px;margin:0 0 12px;color:#434852;font-size:14.5px}
+    .plan li{position:relative;padding-left:27px;margin:0 0 12px;color:var(--muted);font-size:14.5px}
     .plan li:before{content:"✓";position:absolute;left:0;color:var(--accent);font-weight:800}
     .plan .btn{width:100%;justify-content:center}
     .pricing-note{text-align:center;color:var(--soft);font-size:13.5px;margin-top:22px}
@@ -163,7 +163,7 @@ export const landingHtml = `<!doctype html>
     .msg.err{display:block;background:var(--warn-bg);border:1px solid #c0533f;color:#e08a78}
     .selling h3{margin:0 0 16px;font-size:20px;font-weight:800;letter-spacing:-.01em}
     .selling ul{padding:0;margin:0;list-style:none}
-    .selling li{color:#434852;margin:0 0 13px;padding-left:28px;position:relative;font-size:15.5px}
+    .selling li{color:var(--muted);margin:0 0 13px;padding-left:28px;position:relative;font-size:15.5px}
     .selling li:before{content:"✓";position:absolute;left:0;color:var(--accent);font-weight:800}
     .warn{color:var(--warn-ink);font-size:13.5px;border:1px solid var(--warn-line);background:var(--warn-bg);border-radius:12px;padding:13px 15px;margin-top:22px}
     /* responsive: phone */

@@ -18,7 +18,7 @@ export const openApiDocument = {
       'session is one real number (paired by QR); send with human-like pacing through a ' +
       'durable per-session queue, and receive inbound messages + delivery status on a ' +
       'signed webhook (tagged with the session id). No vendor/BSP, no per-message cost.\n\n' +
-      '⚠️ Unofficial and against WhatsApp’s Terms of Service — low-volume, opt-in / ' +
+      'Note: unofficial and against WhatsApp’s Terms of Service — low-volume, opt-in / ' +
       'human-assisted messaging only.',
     license: { name: 'MIT' },
   },
@@ -151,7 +151,7 @@ export const openApiDocument = {
             'application/json': {
               schema: { $ref: '#/components/schemas/SendRequest' },
               examples: {
-                text: { summary: 'Text', value: { to: '+22890000000', text: 'Hello 👋', idempotencyKey: 'camp7-contact42' } },
+                text: { summary: 'Text', value: { to: '+22890000000', text: 'Hello', idempotencyKey: 'camp7-contact42' } },
                 media: { summary: 'Media by URL', value: { to: '+22890000000', media: { url: 'https://example.com/flyer.jpg', caption: 'Our offer' } } },
               },
             },

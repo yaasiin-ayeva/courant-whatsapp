@@ -7,12 +7,23 @@ export const docsHtml = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Courant WhatsApp API — Reference</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d7a43'/%3E%3Cpath d='M21.6 11.1a7 7 0 1 0 0 9.8' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='22.3' cy='16' r='2.1' fill='%23fff'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
   <script id="api-reference" data-url="/openapi.json"></script>
   <script>
     var c = document.getElementById('api-reference')
-    c.dataset.configuration = JSON.stringify({ theme: 'default', layout: 'modern', hideDownloadButton: false })
+    c.dataset.configuration = JSON.stringify({
+      theme: 'default',
+      layout: 'modern',
+      darkMode: false,
+      forceDarkModeState: 'light',
+      hideDarkModeToggle: true,
+      hideDownloadButton: false,
+      customCss: ":root{--scalar-font:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif;--scalar-font-code:ui-monospace,SFMono-Regular,Menlo,monospace} .light-mode{--scalar-color-accent:#0d7a43;--scalar-background-1:#ffffff;--scalar-background-2:#f6f5f2;--scalar-background-3:#efeee9;--scalar-border-color:#e7e5df;--scalar-button-1:#0d7a43;--scalar-button-1-hover:#0a5630} .dark-mode{--scalar-color-accent:#2f9e63}"
+    })
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 </body>

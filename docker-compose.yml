@@ -1,0 +1,18 @@
+# Deploy: a single service behind a reverse proxy (Caddy/nginx) that terminates TLS.
+# The app binds to localhost only; map it to a free local port on the host.
+services:
+  worker:
+    build: .
+    image: courant-whatsapp:latest
+    container_name: courant-whatsapp
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8100:8088"   # host:container — reverse-proxy localhost:8100
+    volumes:
+      - wa_session:/app/.wwebjs_auth   # persisted WhatsApp sessions (scan once)
+      - wa_data:/app/data              # durable queues + session registry
+
+volumes:
+  wa_session:
+  wa_data:

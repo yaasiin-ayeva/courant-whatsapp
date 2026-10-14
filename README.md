@@ -55,12 +55,13 @@ Then **create a session and pair it once**: `POST /api/v1/sessions {"id":"<your-
 session state with a `qr` data-URL — scan it from **WhatsApp → Linked devices**. Repeat with another
 id to add another number. Sessions persist in `SESSION_DIR` (and the registry in `DATA_DIR`).
 
-### Docker
+### Docker Compose (recommended)
 ```bash
-docker build -t courant-whatsapp .
-docker run -d --name courant-whatsapp -p 127.0.0.1:8088:8088 --env-file .env \
-  -v courant_wa_session:/app/.wwebjs_auth -v courant_wa_data:/app/data courant-whatsapp
+cp .env.example .env   # fill it in
+docker compose up -d --build
 ```
+Binds `127.0.0.1:8100` → put Caddy/nginx in front (`reverse_proxy localhost:8100`).
+Volumes `wa_session` + `wa_data` persist the sessions and their queues.
 
 ## How Courant uses it
 

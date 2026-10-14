@@ -71,3 +71,14 @@ WhatsApp settings create/pair that session; a WhatsApp campaign submits sends to
 `config.whatsapp` (`WA_WORKER_URL` / `WA_WORKER_API_KEY` / `WA_WEBHOOK_TOKEN`) and
 `outreach-be/src/services/whatsappSender.service.ts`; inbound replies and delivery status arrive on
 Courant's `/hooks/whatsapp` webhook, routed to the right project by the event's `sessionId`.
+
+## Security posture
+
+- The API requires an API key (`X-API-Key`/Bearer), is rate-limited, and the app binds to
+  localhost behind a TLS reverse proxy. The inbound webhook is HMAC-signed.
+- `npm audit` reports advisories in Puppeteer's **browser-download** chain (`extract-zip`,
+  `basic-ftp`, `proxy-agent`, …), pulled transitively by `whatsapp-web.js`. The image runs with
+  `PUPPETEER_SKIP_DOWNLOAD=true` and the distro's Chromium, so those code paths are never executed.
+  npm's only "fix" downgrades `whatsapp-web.js` (a regression), so we track upstream instead; they
+  clear when `whatsapp-web.js` bumps Puppeteer. Dev tooling uses `tsx` (no `ts-node-dev`/chokidar
+  chain) and is excluded from the runtime image (`npm install --omit=dev`).

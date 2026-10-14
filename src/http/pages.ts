@@ -6,7 +6,7 @@ export const docsHtml = `<!doctype html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Courant WhatsApp API — Reference</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2318a558'/%3E%3Cpath d='M7 20.5c3-5.5 6-5.5 9 0s6 5.5 9 0' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body>
   <script id="api-reference" data-url="/openapi.json"></script>
@@ -25,7 +25,7 @@ export const landingHtml = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Courant WhatsApp API — self-hosted WhatsApp messaging, no BSP</title>
   <meta name="description" content="A multi-session WhatsApp API you can self-host. Pair your own numbers, send with human-like pacing, receive replies on a signed webhook. No BSP, no per-message fees." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2318a558'/%3E%3Cpath d='M7 20.5c3-5.5 6-5.5 9 0s6 5.5 9 0' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -39,9 +39,10 @@ export const landingHtml = `<!doctype html>
     /* nav */
     header.nav{position:sticky;top:0;z-index:50;background:rgba(246,245,242,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
     .nav .wrap{display:flex;align-items:center;gap:22px;height:66px}
-    .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;letter-spacing:-.02em;text-decoration:none}
-    .brand .m{width:16px;height:16px;border-radius:5px;background:linear-gradient(135deg,var(--accent),#49d08a)}
-    .brand span{color:var(--soft);font-weight:600;font-size:15px}
+    .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;letter-spacing:-.025em;text-decoration:none}
+    .brand .m{display:block;flex:none}
+    .brand .tag{color:var(--accent-dk);background:var(--accent-soft);font-weight:700;font-size:11px;padding:3px 9px;border-radius:999px;letter-spacing:.01em}
+    @media(max-width:560px){.brand .tag{display:none}}
     .nav nav{margin-left:auto;display:flex;align-items:center;gap:26px}
     .nav nav a{color:#3a3f46;text-decoration:none;font-size:15px;font-weight:500}
     .nav nav a:hover{color:var(--ink)}
@@ -117,7 +118,7 @@ export const landingHtml = `<!doctype html>
 </head>
 <body>
   <header class="nav"><div class="wrap">
-    <a class="brand" href="/"><span class="m"></span>courant <span>WhatsApp API</span></a>
+    <a class="brand" href="/"><svg class="m" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#18a558"/><stop offset="1" stop-color="#49d08a"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><path d="M7 20.5c3-5.5 6-5.5 9 0s6 5.5 9 0" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>courant<span class="tag">WhatsApp API</span></a>
     <nav>
       <a class="hide" href="#features">Features</a>
       <a class="hide" href="#how">How it works</a>
@@ -134,7 +135,7 @@ export const landingHtml = `<!doctype html>
         pacing, and get replies on a signed webhook — no BSP, no approval queue, no per-message fees.</p>
       <div class="herocta">
         <form id="heroForm" class="inputrow">
-          <input id="heroEmail" type="email" placeholder="Enter your work email" aria-label="Your work email" />
+          <input id="heroEmail" type="email" placeholder="Enter your email" aria-label="Your email" />
           <button class="btn green" type="submit">Get an API key →</button>
         </form>
       </div>
@@ -151,12 +152,12 @@ export const landingHtml = `<!doctype html>
       <p class="lead">A battle-tested engine behind a clean HTTP API. The hard parts — pacing,
         reconnection, durability, deliverability — are handled for you.</p>
       <div class="grid">
-        <div class="card"><h3><span class="ic">📱</span>Multi-session</h3><p>Pair many numbers in one worker, each with its own queue and QR. Rotate numbers to spread load.</p></div>
-        <div class="card"><h3><span class="ic">⚡</span>Async API</h3><p>Queue a message, get a job id instantly, then poll or receive a webhook. The worker paces delivery.</p></div>
-        <div class="card"><h3><span class="ic">🛡️</span>Human pacing</h3><p>Typing simulation, randomized delays, daily caps, warm-up ramps and per-recipient gaps.</p></div>
-        <div class="card"><h3><span class="ic">💾</span>Durable</h3><p>A disk-backed queue per number survives restarts and retries transient failures. Idempotent by your key.</p></div>
-        <div class="card"><h3><span class="ic">🔔</span>Signed webhooks</h3><p>Inbound messages and delivery status pushed to your endpoint, HMAC-signed, tagged with the session id.</p></div>
-        <div class="card"><h3><span class="ic">🖼️</span>Text &amp; media</h3><p>Send plain text or media by URL/base64 with captions. Validate numbers before messaging them.</p></div>
+        <div class="card"><h3><span class="ic"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span>Multi-session</h3><p>Pair many numbers in one worker, each with its own queue and QR. Rotate numbers to spread load.</p></div>
+        <div class="card"><h3><span class="ic"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></span>Async API</h3><p>Queue a message, get a job id instantly, then poll or receive a webhook. The worker paces delivery.</p></div>
+        <div class="card"><h3><span class="ic"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5l-8-3Z"/></svg></span>Human pacing</h3><p>Typing simulation, randomized delays, daily caps, warm-up ramps and per-recipient gaps.</p></div>
+        <div class="card"><h3><span class="ic"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></span>Durable</h3><p>A disk-backed queue per number survives restarts and retries transient failures. Idempotent by your key.</p></div>
+        <div class="card"><h3><span class="ic"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 7 3 5 3 9H3c0-4 3-2 3-9"/><path d="M10.5 21a1.5 1.5 0 0 0 3 0"/></svg></span>Signed webhooks</h3><p>Inbound messages and delivery status pushed to your endpoint, HMAC-signed, tagged with the session id.</p></div>
+        <div class="card"><h3><span class="ic"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg></span>Text &amp; media</h3><p>Send plain text or media by URL/base64 with captions. Validate numbers before messaging them.</p></div>
       </div>
     </section>
 
@@ -171,7 +172,7 @@ export const landingHtml = `<!doctype html>
       </div>
       <pre style="margin-top:28px;text-align:left"><code>curl -X POST https://wa.yaasiin.dev/api/v1/sessions/<span class="tok">&lt;id&gt;</span>/messages \\
   -H "<span class="tok">X-API-Key</span>: wa_your_key" -H "Content-Type: application/json" \\
-  -d '{ "to": "+22890000000", "text": "Hello 👋" }'</code></pre>
+  -d '{ "to": "+22890000000", "text": "Hello" }'</code></pre>
     </section>
 
     <section id="get">
@@ -182,7 +183,7 @@ export const landingHtml = `<!doctype html>
           <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
           <label>Name <span class="req">*</span></label>
           <input class="f" name="name" required maxlength="120" placeholder="Jane Doe" />
-          <label>Work email <span class="req">*</span></label>
+          <label>Email <span class="req">*</span></label>
           <input class="f" name="email" type="email" required maxlength="160" placeholder="jane@company.com" />
           <label>Company</label>
           <input class="f" name="company" maxlength="120" placeholder="Acme Inc." />
@@ -209,7 +210,7 @@ export const landingHtml = `<!doctype html>
             <li>Full <a href="/docs" style="color:var(--accent-dk);font-weight:600">API reference</a> and examples.</li>
             <li>Flat pricing — no per-message fees.</li>
           </ul>
-          <div class="warn">⚠️ This is an <b>unofficial</b> WhatsApp API and is against WhatsApp's Terms of Service. Use it for low-volume, opt-in / human-assisted messaging. You are responsible for consent and opt-out.</div>
+          <div class="warn"><b>Please note:</b> this is an <b>unofficial</b> WhatsApp API and is against WhatsApp's Terms of Service. Use it for low-volume, opt-in / human-assisted messaging. You are responsible for consent and opt-out.</div>
         </div>
       </div>
     </section>

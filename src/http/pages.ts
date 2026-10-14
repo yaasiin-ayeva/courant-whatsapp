@@ -102,6 +102,20 @@ export const landingHtml = `<!doctype html>
     .step h3{margin:0 0 7px;font-size:17px;font-weight:700}.step p{margin:0;color:var(--muted);font-size:15px}
     pre{background:#0f1113;border-radius:16px;padding:22px;overflow:auto;font:14px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;color:#d9e7df;box-shadow:0 12px 30px rgba(16,17,19,.12)}
     .tok{color:#46b87b}
+    /* pricing */
+    .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(262px,1fr));gap:18px;align-items:stretch}
+    .plan{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:28px 26px;box-shadow:0 1px 2px rgba(16,17,19,.03)}
+    .plan.pop{border:2px solid var(--accent);box-shadow:0 16px 38px rgba(13,122,67,.13);position:relative}
+    .plan .pbadge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:5px 13px;border-radius:999px;white-space:nowrap}
+    .plan h3{margin:0;font-size:19px;font-weight:800}
+    .plan .desc{color:var(--muted);font-size:14px;margin:5px 0 16px}
+    .plan .price{font-size:42px;font-weight:800;letter-spacing:-.03em;line-height:1}
+    .plan .price small{font-size:15px;font-weight:600;color:var(--soft);letter-spacing:0}
+    .plan ul{list-style:none;padding:0;margin:20px 0 24px;flex:1}
+    .plan li{position:relative;padding-left:27px;margin:0 0 12px;color:#434852;font-size:14.5px}
+    .plan li:before{content:"✓";position:absolute;left:0;color:var(--accent);font-weight:800}
+    .plan .btn{width:100%;justify-content:center}
+    .pricing-note{text-align:center;color:var(--soft);font-size:13.5px;margin-top:22px}
     /* form */
     .formwrap{display:grid;grid-template-columns:1.05fr .95fr;gap:38px;align-items:start}
     @media(max-width:820px){.formwrap{grid-template-columns:1fr}}
@@ -133,6 +147,7 @@ export const landingHtml = `<!doctype html>
     <nav>
       <a class="hide" href="#features">Features</a>
       <a class="hide" href="#how">How it works</a>
+      <a class="hide" href="#pricing">Pricing</a>
       <a href="/docs">Docs</a>
       <a class="btn green" href="#get">Get an API key</a>
     </nav>
@@ -184,6 +199,53 @@ export const landingHtml = `<!doctype html>
       <pre style="margin-top:28px;text-align:left"><code>curl -X POST https://wa.yaasiin.dev/api/v1/sessions/<span class="tok">&lt;id&gt;</span>/messages \\
   -H "<span class="tok">X-API-Key</span>: wa_your_key" -H "Content-Type: application/json" \\
   -d '{ "to": "+22890000000", "text": "Hello" }'</code></pre>
+    </section>
+
+    <section id="pricing" class="center">
+      <span class="eyebrow">Pricing</span>
+      <h2>Flat pricing. No per-message fees.</h2>
+      <p class="lead">Pay for the numbers you run — not for every message you send. Cancel anytime.</p>
+      <div class="plans" style="text-align:left">
+        <div class="plan">
+          <h3>Starter</h3>
+          <p class="desc">For a single number.</p>
+          <div class="price">$19<small> /mo</small></div>
+          <ul>
+            <li>1 WhatsApp number</li>
+            <li>Human-paced sending</li>
+            <li>Webhooks — replies &amp; status</li>
+            <li>Durable queue &amp; retries</li>
+            <li>Email support</li>
+          </ul>
+          <a class="btn ghost" href="#get">Get started</a>
+        </div>
+        <div class="plan pop">
+          <span class="pbadge">Most popular</span>
+          <h3>Pro</h3>
+          <p class="desc">For teams running a few numbers.</p>
+          <div class="price">$59<small> /mo</small></div>
+          <ul>
+            <li>Up to 5 numbers</li>
+            <li>Higher daily caps &amp; warm-up</li>
+            <li>Everything in Starter</li>
+            <li>Priority support</li>
+          </ul>
+          <a class="btn green" href="#get">Get started</a>
+        </div>
+        <div class="plan">
+          <h3>Scale</h3>
+          <p class="desc">For high volume &amp; SLAs.</p>
+          <div class="price">Custom</div>
+          <ul>
+            <li>Unlimited numbers</li>
+            <li>Dedicated instance</li>
+            <li>SLA &amp; onboarding</li>
+            <li>Priority support</li>
+          </ul>
+          <a class="btn ghost" href="#get">Contact us</a>
+        </div>
+      </div>
+      <p class="pricing-note">Save about 2 months when billed annually. The numbers are yours — cancel anytime.</p>
     </section>
 
     <section id="get">

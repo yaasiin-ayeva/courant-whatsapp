@@ -9,11 +9,13 @@
  *
  * Run on a host with Chromium available (see Dockerfile). One worker = one number.
  *
- *   GET  /health                      -> { ok, ready }
- *   GET  /status                      -> { ready, qr }  (qr is a data-URL to scan)
- *   POST /send  { to, message }       -> queues a message (X-Token required)
+ * HTTP API (authenticate with X-API-Key or "Authorization: Bearer <key>"):
+ *   GET  /health                         -> { ok, ready }            (open)
+ *   GET  /api/v1/status                  -> { ready, qr }  (qr is a data-URL to scan)
+ *   POST /api/v1/send  { to, message }   -> queues a message
  *
- * Inbound messages are POSTed to COURANT_WEBHOOK_URL (with X-Token) when set.
+ * Inbound messages are POSTed to COURANT_WEBHOOK_URL (with X-Token: WA_WEBHOOK_TOKEN)
+ * when set — Courant verifies that token and handles replies / opt-out.
  */
 import express from 'express'
 import qrcode from 'qrcode'
@@ -21,7 +23,8 @@ import pkg from 'whatsapp-web.js'
 const { Client, LocalAuth } = pkg
 
 const PORT = Number(process.env.PORT || 8088)
-const TOKEN = process.env.WA_WORKER_TOKEN || ''
+const API_KEYS = new Set((process.env.WA_API_KEYS || '').split(',').map((k) => k.trim()).filter(Boolean))
+const WEBHOOK_TOKEN = process.env.WA_WEBHOOK_TOKEN || ''
 const WEBHOOK = process.env.COURANT_WEBHOOK_URL || ''
 const SESSION_DIR = process.env.SESSION_DIR || './.wwebjs_auth'
 const SEND_MIN = Number(process.env.SEND_MIN_MS || 8000)
@@ -47,7 +50,7 @@ client.on('message', async (msg) => {
   console.log('[wa] inbound from', msg.from)
   if (WEBHOOK) {
     try {
-      await fetch(WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN }, body: JSON.stringify(payload) })
+      await fetch(WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Token': WEBHOOK_TOKEN }, body: JSON.stringify(payload) })
     } catch (e) { console.error('[wa] webhook failed:', e?.message) }
   }
 })
@@ -84,13 +87,17 @@ async function drain() {
 // ── HTTP API (internal) ──────────────────────────────────────────────────────
 const app = express()
 app.use(express.json({ limit: '256kb' }))
-const auth = (req, res, next) => (TOKEN && req.get('X-Token') !== TOKEN ? res.status(401).json({ error: 'bad token' }) : next())
+const keyOf = (req) => req.get('X-API-Key') || (req.get('Authorization') || '').replace(/^Bearer /i, '')
+const auth = (req, res, next) => (API_KEYS.size === 0 || API_KEYS.has(keyOf(req)) ? next() : res.status(401).json({ error: 'invalid api key' }))
 
 app.get('/health', (_req, res) => res.json({ ok: true, ready }))
-app.get('/status', async (_req, res) => {
+
+const v1 = express.Router()
+v1.use(auth)
+v1.get('/status', async (_req, res) => {
   res.json({ ready, qr: lastQr ? await qrcode.toDataURL(lastQr) : null })
 })
-app.post('/send', auth, (req, res) => {
+v1.post('/send', (req, res) => {
   const { to, message } = req.body || {}
   if (!to || !message) return res.status(400).json({ error: 'to and message are required' })
   new Promise((resolve, reject) => {
@@ -98,5 +105,6 @@ app.post('/send', auth, (req, res) => {
     drain()
   }).then((r) => res.json({ queued: true, ...r })).catch((e) => res.status(502).json({ error: e?.message || 'send failed' }))
 })
+app.use('/api/v1', v1)
 
 app.listen(PORT, () => console.log(`[wa] worker on :${PORT} (session ${SESSION_DIR})`))

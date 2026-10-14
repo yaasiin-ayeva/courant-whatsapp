@@ -109,9 +109,9 @@ export const landingHtml = `<!doctype html>
     .plan .pbadge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:5px 13px;border-radius:999px;white-space:nowrap}
     .plan h3{margin:0;font-size:19px;font-weight:800}
     .plan .desc{color:var(--muted);font-size:14px;margin:5px 0 16px}
-    .plan .price{font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1.05}
-    .plan .price .amt{white-space:nowrap}
+    .plan .price{font-size:42px;font-weight:800;letter-spacing:-.03em;line-height:1}
     .plan .price small{font-size:15px;font-weight:600;color:var(--soft);letter-spacing:0}
+    .plan .local{font-size:12.5px;color:var(--soft);margin-top:7px;min-height:15px;font-weight:600}
     .plan ul{list-style:none;padding:0;margin:20px 0 24px;flex:1}
     .plan li{position:relative;padding-left:27px;margin:0 0 12px;color:#434852;font-size:14.5px}
     .plan li:before{content:"✓";position:absolute;left:0;color:var(--accent);font-weight:800}
@@ -225,7 +225,8 @@ export const landingHtml = `<!doctype html>
         <div class="plan">
           <h3>Starter</h3>
           <p class="desc">For a single number.</p>
-          <div class="price" data-usd="9"><span class="amt">$9</span><small> /mo</small></div>
+          <div class="price"><span class="amt">$9</span><small> /mo</small></div>
+          <div class="local" data-usd="9"></div>
           <ul>
             <li>1 WhatsApp number</li>
             <li>Human-paced sending</li>
@@ -239,7 +240,8 @@ export const landingHtml = `<!doctype html>
           <span class="pbadge">Most popular</span>
           <h3>Pro</h3>
           <p class="desc">For teams running a few numbers.</p>
-          <div class="price" data-usd="29"><span class="amt">$29</span><small> /mo</small></div>
+          <div class="price"><span class="amt">$29</span><small> /mo</small></div>
+          <div class="local" data-usd="29"></div>
           <ul>
             <li>Up to 5 numbers</li>
             <li>Higher daily caps &amp; warm-up</li>
@@ -320,11 +322,12 @@ export const landingHtml = `<!doctype html>
       var cur=document.getElementById('cur')
       if(cur){
         var apply=function(c){
-          var els=document.querySelectorAll('.price[data-usd]')
+          var els=document.querySelectorAll('.local[data-usd]')
           for(var i=0;i<els.length;i++){
+            if(c==='USD'){els[i].textContent='';continue}
             var usd=parseFloat(els[i].getAttribute('data-usd')),v=Math.round(usd*(RATES[c]||1)),s
             try{s=new Intl.NumberFormat(undefined,{style:'currency',currency:c,maximumFractionDigits:0}).format(v)}catch(e){s=c+' '+v}
-            els[i].querySelector('.amt').textContent=(c==='USD'?'':'≈ ')+s
+            els[i].textContent='≈ '+s+' /mo'
           }
         }
         var reg=((navigator.language||'').split('-')[1]||'').toUpperCase()

@@ -15,14 +15,13 @@ export const docsHtml = `<!doctype html>
   <script id="api-reference" data-url="/openapi.json"></script>
   <script>
     var c = document.getElementById('api-reference')
+    var dark=false;try{var t=localStorage.getItem('theme');dark=t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches}catch(e){}
     c.dataset.configuration = JSON.stringify({
       theme: 'default',
       layout: 'modern',
-      darkMode: false,
-      forceDarkModeState: 'light',
-      hideDarkModeToggle: true,
+      darkMode: dark,
       hideDownloadButton: false,
-      customCss: ":root{--scalar-font:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif;--scalar-font-code:ui-monospace,SFMono-Regular,Menlo,monospace} .light-mode{--scalar-color-accent:#0d7a43;--scalar-background-1:#ffffff;--scalar-background-2:#f6f5f2;--scalar-background-3:#efeee9;--scalar-border-color:#e7e5df;--scalar-button-1:#0d7a43;--scalar-button-1-hover:#0a5630} .dark-mode{--scalar-color-accent:#2f9e63}"
+      customCss: ":root{--scalar-font:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif;--scalar-font-code:ui-monospace,SFMono-Regular,Menlo,monospace} .light-mode{--scalar-color-accent:#0d7a43;--scalar-background-1:#ffffff;--scalar-background-2:#f6f5f2;--scalar-background-3:#efeee9;--scalar-border-color:#e7e5df;--scalar-button-1:#0d7a43;--scalar-button-1-hover:#0a5630} .dark-mode{--scalar-color-accent:#38c074;--scalar-background-1:#0b100e;--scalar-background-2:#141b18;--scalar-background-3:#1a2320;--scalar-border-color:#212b28}"
     })
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
@@ -40,15 +39,24 @@ export const landingHtml = `<!doctype html>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
   <style>
-    :root{--bg:#f6f5f2;--card:#ffffff;--ink:#0f1113;--muted:#6b7280;--soft:#9aa1ab;--line:#e7e5df;--line2:#dcdad2;--pill:#efeee9;--accent:#0d7a43;--accent-dk:#0a5630;--accent-soft:#e8f2ea;--warn-bg:#fff7e6;--warn-line:#f0d79a;--warn-ink:#8a6414;--radius:18px}
+    :root{--bg:#f6f5f2;--card:#ffffff;--field:#fcfcfb;--ink:#0f1113;--muted:#6b7280;--soft:#9aa1ab;--line:#e7e5df;--line2:#dcdad2;--pill:#efeee9;--accent:#0d7a43;--accent-dk:#0a5630;--accent-soft:#e8f2ea;--warn-bg:#fff7e6;--warn-line:#f0d79a;--warn-ink:#8a6414;--nav-bg:rgba(246,245,242,.82);--radius:18px}
+    :root[data-theme="dark"]{--bg:#0b100e;--card:#141b18;--field:#0f1613;--ink:#e9efec;--muted:#9fb0ab;--soft:#74837d;--line:#212b28;--line2:#2d3b37;--pill:#1a2320;--accent:#28ac60;--accent-dk:#208f4e;--accent-soft:#132a1e;--warn-bg:#241c0a;--warn-line:#4a3a16;--warn-ink:#e3bd6b;--nav-bg:rgba(11,16,14,.84)}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b100e;--card:#141b18;--field:#0f1613;--ink:#e9efec;--muted:#9fb0ab;--soft:#74837d;--line:#212b28;--line2:#2d3b37;--pill:#1a2320;--accent:#28ac60;--accent-dk:#208f4e;--accent-soft:#132a1e;--warn-bg:#241c0a;--warn-line:#4a3a16;--warn-ink:#e3bd6b;--nav-bg:rgba(11,16,14,.84)}}
     *{box-sizing:border-box}
     html{scroll-behavior:smooth}
     body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:16px;line-height:1.6;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
     a{color:inherit}
     .wrap{max-width:1060px;margin:0 auto;padding:0 22px}
     /* nav */
-    header.nav{position:sticky;top:0;z-index:50;background:rgba(246,245,242,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+    header.nav{position:sticky;top:0;z-index:50;background:var(--nav-bg);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+    .themebtn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border:1px solid var(--line2);background:var(--card);border-radius:10px;cursor:pointer;color:var(--muted);flex:none}
+    .themebtn:hover{color:var(--ink);border-color:var(--ink)}
+    .themebtn svg{width:18px;height:18px}
+    .themebtn .sun{display:none}
+    :root[data-theme="dark"] .themebtn .sun{display:inline}
+    :root[data-theme="dark"] .themebtn .moon{display:none}
     .nav .wrap{display:flex;align-items:center;gap:22px;height:66px}
     .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;letter-spacing:-.025em;text-decoration:none}
     .brand .m{display:block;flex:none}
@@ -57,9 +65,9 @@ export const landingHtml = `<!doctype html>
     .nav nav{margin-left:auto;display:flex;align-items:center;gap:26px}
     .nav nav a{color:#3a3f46;text-decoration:none;font-size:15px;font-weight:500}
     .nav nav a:hover{color:var(--ink)}
-    .btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:15px;padding:11px 18px;border-radius:12px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;transition:.15s}
+    .btn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;font-weight:700;font-size:15px;padding:11px 18px;border-radius:12px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;transition:.15s}
     .btn:hover{opacity:.88}
-    .btn.ghost{background:#fff;color:var(--ink);border-color:var(--line2)}
+    .btn.ghost{background:var(--card);color:var(--ink);border-color:var(--line2)}
     .btn.ghost:hover{border-color:var(--ink);opacity:1}
     .btn.green{background:var(--accent);border-color:var(--accent);color:#fff}
     .btn.green:hover{background:var(--accent-dk);border-color:var(--accent-dk);opacity:1}
@@ -67,7 +75,7 @@ export const landingHtml = `<!doctype html>
     @media(max-width:760px){.nav nav a.hide{display:none}}
     /* hero */
     .hero{padding:72px 0 30px;text-align:center}
-    .badge{display:inline-flex;align-items:center;gap:9px;padding:7px 15px;background:#fff;border:1px solid var(--line);border-radius:999px;font-size:14px;color:#3a3f46;box-shadow:0 1px 2px rgba(16,17,19,.04)}
+    .badge{display:inline-flex;align-items:center;gap:9px;padding:7px 15px;background:var(--card);border:1px solid var(--line);border-radius:999px;font-size:14px;color:var(--muted);box-shadow:0 1px 2px rgba(16,17,19,.04)}
     .badge b{font-weight:800;color:var(--ink)}
     .dot{width:8px;height:8px;border-radius:50%;background:var(--soft)}
     .dot.ok{background:var(--accent);animation:pulse 2s infinite}
@@ -77,7 +85,7 @@ export const landingHtml = `<!doctype html>
     .mark{color:var(--accent)}
     .sub{color:var(--muted);font-size:clamp(17px,2.3vw,21px);max-width:58ch;margin:0 auto 26px}
     .herocta{max-width:560px;margin:0 auto}
-    .inputrow{display:flex;gap:10px;background:#fff;border:2px solid var(--ink);border-radius:16px;padding:7px 7px 7px 8px;box-shadow:0 10px 30px rgba(16,17,19,.08)}
+    .inputrow{display:flex;gap:10px;background:var(--card);border:2px solid var(--ink);border-radius:16px;padding:7px 7px 7px 8px;box-shadow:0 10px 30px rgba(16,17,19,.08)}
     .inputrow input{flex:1;border:none;outline:none;background:transparent;font:inherit;font-size:16px;color:var(--ink);padding:0 10px}
     .inputrow input::placeholder{color:var(--soft)}
     .inputrow button{white-space:nowrap}
@@ -117,29 +125,43 @@ export const landingHtml = `<!doctype html>
     .plan li:before{content:"✓";position:absolute;left:0;color:var(--accent);font-weight:800}
     .plan .btn{width:100%;justify-content:center}
     .pricing-note{text-align:center;color:var(--soft);font-size:13.5px;margin-top:22px}
-    .curbar{display:inline-flex;align-items:center;gap:4px;margin:-14px 0 26px;font-size:12.5px;color:var(--soft)}
-    .curbar select{border:none;background:transparent;font:inherit;font-weight:600;color:var(--muted);outline:none;cursor:pointer;padding:1px 2px}
-    .curbar select:hover{color:var(--ink)}
+    .curbar{display:inline-flex;align-items:center;gap:8px;margin:-14px 0 28px;font-size:13px;color:var(--soft);white-space:nowrap}
+    .curbar select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:1px solid var(--line2);background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;background-size:11px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;padding:6px 30px 6px 12px;border-radius:9px;outline:none}
+    .curbar select:hover{border-color:var(--ink)}
+    .curbar select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
     /* form */
     .formwrap{display:grid;grid-template-columns:1.05fr .95fr;gap:38px;align-items:start}
     @media(max-width:820px){.formwrap{grid-template-columns:1fr}}
     form.key{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:28px;box-shadow:0 10px 30px rgba(16,17,19,.06)}
     label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin:16px 0 6px}
     label:first-of-type{margin-top:0}
-    input.f,select,textarea{width:100%;background:#fcfcfb;border:1px solid var(--line2);border-radius:12px;color:var(--ink);font:inherit;font-size:15px;padding:12px 14px;outline:none;transition:.15s}
+    input.f,select,textarea{width:100%;background:var(--field);border:1px solid var(--line2);border-radius:12px;color:var(--ink);font:inherit;font-size:15px;padding:12px 14px;outline:none;transition:.15s}
     input.f:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
     textarea{resize:vertical;min-height:90px}
     .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
     .req{color:var(--accent)}
     .formnote{color:var(--soft);font-size:12.5px;margin-top:13px}
     .msg{margin-top:15px;font-size:14.5px;display:none;border-radius:12px;padding:12px 14px}
-    .msg.ok{display:block;background:var(--accent-soft);border:1px solid #bfe6cf;color:var(--accent-dk)}
-    .msg.err{display:block;background:#fdecea;border:1px solid #f3c4bb;color:#b4412f}
+    .msg.ok{display:block;background:var(--accent-soft);border:1px solid var(--accent-dk);color:var(--accent)}
+    .msg.err{display:block;background:var(--warn-bg);border:1px solid #c0533f;color:#e08a78}
     .selling h3{margin:0 0 16px;font-size:20px;font-weight:800;letter-spacing:-.01em}
     .selling ul{padding:0;margin:0;list-style:none}
     .selling li{color:#434852;margin:0 0 13px;padding-left:28px;position:relative;font-size:15.5px}
     .selling li:before{content:"✓";position:absolute;left:0;color:var(--accent);font-weight:800}
     .warn{color:var(--warn-ink);font-size:13.5px;border:1px solid var(--warn-line);background:var(--warn-bg);border-radius:12px;padding:13px 15px;margin-top:22px}
+    /* responsive: phone */
+    @media(max-width:600px){
+      .wrap{padding:0 18px}
+      .nav .wrap{gap:12px}
+      .nav nav{gap:14px}
+      .nav .btn.green{display:none}
+      .hero{padding:50px 0 26px}
+      section{padding:48px 0}
+      .inputrow{flex-direction:column;padding:10px;gap:9px}
+      .inputrow input{padding:10px 8px}
+      .inputrow button{width:100%;justify-content:center}
+      .plan .price{font-size:38px}
+    }
     footer{border-top:1px solid var(--line);padding:30px 0 46px;color:var(--muted);font-size:14px;margin-top:20px}
     footer .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center}
     footer a{color:var(--muted);text-decoration:none}footer a:hover{color:var(--ink)}
@@ -153,6 +175,10 @@ export const landingHtml = `<!doctype html>
       <a class="hide" href="#how">How it works</a>
       <a class="hide" href="#pricing">Pricing</a>
       <a href="/docs">Docs</a>
+      <button class="themebtn" id="themeBtn" type="button" aria-label="Toggle dark mode">
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
       <a class="btn green" href="#get">Get an API key</a>
     </nav>
   </div></header>
@@ -318,6 +344,14 @@ export const landingHtml = `<!doctype html>
 
   <script>
     (function(){
+      // Dark-mode toggle (persists; defaults to system).
+      var tb=document.getElementById('themeBtn')
+      if(tb){tb.addEventListener('click',function(){
+        var next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'
+        document.documentElement.setAttribute('data-theme',next)
+        try{localStorage.setItem('theme',next)}catch(e){}
+      })}
+
       // Pricing currency conversion (base USD; local amounts approximate).
       var RATES={USD:1,EUR:0.92,XOF:600,XAF:600,GHS:15,NGN:1600,KES:130,ZAR:18,MAD:10}
       var cur=document.getElementById('cur')

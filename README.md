@@ -31,7 +31,9 @@ src/
 - **Robust session** — auto-reconnect with backoff, QR state machine, `logout`/`restart`.
 - **Text & media**, metrics, structured logs.
 
-Full HTTP reference: **[API.md](./API.md)**.
+**Interactive API reference (Scalar):** [https://wa.yaasiin.dev/docs](https://wa.yaasiin.dev/docs) ·
+raw spec at [`/openapi.json`](https://wa.yaasiin.dev/openapi.json) (source: `src/http/openapi.ts`).
+A landing page is served at [`/`](https://wa.yaasiin.dev/).
 
 ## Run
 

@@ -2,6 +2,8 @@ import express from 'express'
 import type { Application } from 'express'
 import { apiKeyAuth, rateLimit } from './auth'
 import { v1 } from './routes'
+import { openApiDocument } from './openapi'
+import { docsHtml, landingHtml } from './pages'
 import { session } from '../core/session'
 import { logger } from '../core/logger'
 
@@ -19,6 +21,11 @@ export function buildApp(): Application {
   app.get('/health', (_req, res) => {
     res.json({ ok: true, ready: session.isReady() })
   })
+
+  // Public landing + interactive API docs (Scalar) + the OpenAPI spec.
+  app.get('/', (_req, res) => res.type('html').send(landingHtml))
+  app.get('/docs', (_req, res) => res.type('html').send(docsHtml))
+  app.get('/openapi.json', (_req, res) => res.json(openApiDocument))
 
   app.use('/api/v1', rateLimit, apiKeyAuth, v1)
 

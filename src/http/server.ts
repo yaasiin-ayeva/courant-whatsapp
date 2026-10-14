@@ -2,6 +2,7 @@ import express from 'express'
 import type { Application } from 'express'
 import { apiKeyAuth, rateLimit } from './auth'
 import { v1 } from './routes'
+import { requestKey } from './keyRequest'
 import { openApiDocument } from './openapi'
 import { docsHtml, landingHtml } from './pages'
 import { manager } from '../core/manager'
@@ -32,6 +33,13 @@ export function buildApp(): Application {
   app.get('/', (_req, res) => res.type('html').send(landingHtml))
   app.get('/docs', (_req, res) => res.type('html').send(docsHtml))
   app.get('/openapi.json', (_req, res) => res.json(openApiDocument))
+
+  // Public (no API key): the landing form requests a key → emailed to the operator.
+  app.post('/api/v1/request-key', rateLimit, (req, res) => {
+    requestKey(req, res).catch(() => {
+      if (!res.headersSent) res.status(500).json({ error: 'internal error' })
+    })
+  })
 
   app.use('/api/v1', rateLimit, apiKeyAuth, v1)
 

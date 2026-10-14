@@ -74,7 +74,21 @@ export const env = {
   /** Retries + how long terminal jobs stay queryable/idempotent. */
   maxAttempts: num('WA_MAX_ATTEMPTS', 3),
   jobTtlMs: num('WA_JOB_TTL_MS', 24 * 60 * 60 * 1000),
+
+  /** Landing page "request an API key" form → emailed here via SMTP. */
+  contactEmail: str('CONTACT_EMAIL', 'ayevayaasiin@gmail.com'),
+  smtp: {
+    host: str('SMTP_HOST'),
+    port: num('SMTP_PORT', 587),
+    secure: bool('SMTP_SECURE', false),
+    user: str('SMTP_USER'),
+    pass: str('SMTP_PASS'),
+    from: str('SMTP_FROM'),
+  },
 }
+
+/** Can the "request a key" form actually send mail? */
+export const mailConfigured = (): boolean => !!env.smtp.host && !!env.smtp.user && !!env.contactEmail
 
 export function validateEnv(): void {
   const problems: string[] = []

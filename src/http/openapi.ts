@@ -42,6 +42,38 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/v1/request-key': {
+      post: {
+        tags: ['System'],
+        summary: 'Request an API key',
+        description: 'Public (no auth). The landing-page form posts here; the request is emailed to the operator, who issues a key.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'email'],
+                properties: {
+                  name: { type: 'string' },
+                  email: { type: 'string', format: 'email' },
+                  company: { type: 'string' },
+                  volume: { type: 'string' },
+                  useCase: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { $ref: '#/components/responses/Ok' },
+          400: { $ref: '#/components/responses/BadRequest' },
+          502: { description: 'Could not send the request email.' },
+          503: { description: 'Email is not configured on the server.' },
+        },
+      },
+    },
     '/api/v1/sessions': {
       get: {
         tags: ['Sessions'],

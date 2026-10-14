@@ -109,13 +109,16 @@ export const landingHtml = `<!doctype html>
     .plan .pbadge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:5px 13px;border-radius:999px;white-space:nowrap}
     .plan h3{margin:0;font-size:19px;font-weight:800}
     .plan .desc{color:var(--muted);font-size:14px;margin:5px 0 16px}
-    .plan .price{font-size:42px;font-weight:800;letter-spacing:-.03em;line-height:1}
+    .plan .price{font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1.05}
+    .plan .price .amt{white-space:nowrap}
     .plan .price small{font-size:15px;font-weight:600;color:var(--soft);letter-spacing:0}
     .plan ul{list-style:none;padding:0;margin:20px 0 24px;flex:1}
     .plan li{position:relative;padding-left:27px;margin:0 0 12px;color:#434852;font-size:14.5px}
     .plan li:before{content:"✓";position:absolute;left:0;color:var(--accent);font-weight:800}
     .plan .btn{width:100%;justify-content:center}
     .pricing-note{text-align:center;color:var(--soft);font-size:13.5px;margin-top:22px}
+    .curbar{display:inline-flex;align-items:center;gap:8px;margin:-10px 0 30px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 10px 7px 15px;font-size:14px;color:var(--muted);box-shadow:0 1px 2px rgba(16,17,19,.04)}
+    .curbar select{border:none;background:transparent;font:inherit;font-weight:700;color:var(--ink);outline:none;cursor:pointer;padding:3px 6px;border-radius:8px}
     /* form */
     .formwrap{display:grid;grid-template-columns:1.05fr .95fr;gap:38px;align-items:start}
     @media(max-width:820px){.formwrap{grid-template-columns:1fr}}
@@ -205,11 +208,24 @@ export const landingHtml = `<!doctype html>
       <span class="eyebrow">Pricing</span>
       <h2>Flat pricing. No per-message fees.</h2>
       <p class="lead">Pay for the numbers you run — not for every message you send. Cancel anytime.</p>
+      <div class="curbar">Show prices in
+        <select id="cur" aria-label="Currency">
+          <option value="USD">USD $</option>
+          <option value="EUR">EUR €</option>
+          <option value="XOF">XOF · CFA</option>
+          <option value="XAF">XAF · CFA</option>
+          <option value="GHS">GHS ₵</option>
+          <option value="NGN">NGN ₦</option>
+          <option value="KES">KES</option>
+          <option value="ZAR">ZAR</option>
+          <option value="MAD">MAD</option>
+        </select>
+      </div>
       <div class="plans" style="text-align:left">
         <div class="plan">
           <h3>Starter</h3>
           <p class="desc">For a single number.</p>
-          <div class="price">$19<small> /mo</small></div>
+          <div class="price" data-usd="9"><span class="amt">$9</span><small> /mo</small></div>
           <ul>
             <li>1 WhatsApp number</li>
             <li>Human-paced sending</li>
@@ -223,7 +239,7 @@ export const landingHtml = `<!doctype html>
           <span class="pbadge">Most popular</span>
           <h3>Pro</h3>
           <p class="desc">For teams running a few numbers.</p>
-          <div class="price">$59<small> /mo</small></div>
+          <div class="price" data-usd="29"><span class="amt">$29</span><small> /mo</small></div>
           <ul>
             <li>Up to 5 numbers</li>
             <li>Higher daily caps &amp; warm-up</li>
@@ -245,7 +261,7 @@ export const landingHtml = `<!doctype html>
           <a class="btn ghost" href="#get">Contact us</a>
         </div>
       </div>
-      <p class="pricing-note">Save about 2 months when billed annually. The numbers are yours — cancel anytime.</p>
+      <p class="pricing-note">Billed in USD; local amounts are approximate. Save about 2 months billed annually — cancel anytime.</p>
     </section>
 
     <section id="get">
@@ -295,11 +311,29 @@ export const landingHtml = `<!doctype html>
     <a href="/openapi.json">OpenAPI</a>
     <a href="/health">Status</a>
     <a href="https://github.com/yaasiin-ayeva/courant-whatsapp" target="_blank" rel="noopener">GitHub</a>
-    <a href="https://yaasiin.dev" target="_blank" rel="noopener" style="margin-left:auto;font-weight:600">Powered by yaasiin.dev</a>
   </div></footer>
 
   <script>
     (function(){
+      // Pricing currency conversion (base USD; local amounts approximate).
+      var RATES={USD:1,EUR:0.92,XOF:600,XAF:600,GHS:15,NGN:1600,KES:130,ZAR:18,MAD:10}
+      var cur=document.getElementById('cur')
+      if(cur){
+        var apply=function(c){
+          var els=document.querySelectorAll('.price[data-usd]')
+          for(var i=0;i<els.length;i++){
+            var usd=parseFloat(els[i].getAttribute('data-usd')),v=Math.round(usd*(RATES[c]||1)),s
+            try{s=new Intl.NumberFormat(undefined,{style:'currency',currency:c,maximumFractionDigits:0}).format(v)}catch(e){s=c+' '+v}
+            els[i].querySelector('.amt').textContent=(c==='USD'?'':'≈ ')+s
+          }
+        }
+        var reg=((navigator.language||'').split('-')[1]||'').toUpperCase()
+        var REG={CI:'XOF',SN:'XOF',TG:'XOF',BJ:'XOF',BF:'XOF',ML:'XOF',NE:'XOF',GW:'XOF',GH:'GHS',NG:'NGN',KE:'KES',ZA:'ZAR',MA:'MAD',CM:'XAF',GA:'XAF',TD:'XAF',CG:'XAF',CF:'XAF',FR:'EUR',DE:'EUR',ES:'EUR',IT:'EUR',BE:'EUR',PT:'EUR',NL:'EUR'}
+        var def=REG[reg]||'USD'
+        cur.value=def;apply(def)
+        cur.addEventListener('change',function(){apply(cur.value)})
+      }
+
       fetch('/health').then(function(r){return r.json()}).then(function(d){
         var dot=document.getElementById('dot'),st=document.getElementById('state'),c=d.connected||0
         if(c>0){dot.className='dot ok';st.textContent=c+' number'+(c>1?'s':'')+' live'}

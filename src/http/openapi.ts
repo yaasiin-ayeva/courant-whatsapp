@@ -5,14 +5,15 @@
  * The worker is multi-session: one session per WhatsApp number, addressed by id
  * (Courant uses the project id). Everything lives under /api/v1/sessions/{id}.
  */
-const jobStatus = ['queued', 'sending', 'sent', 'failed', 'held']
+const jobStatus = ['queued', 'sending', 'sent', 'failed']
+const sessionStatus = ['scanning', 'connected', 'disconnected', 'logged_out', 'error', 'locked']
 const idParam = { name: 'id', in: 'path', required: true, schema: { type: 'string' }, description: 'Session id (Courant uses the project id).' }
 
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'Courant WhatsApp Worker API',
-    version: '2.0.0',
+    version: '2.1.0',
     description:
       'A standalone, multi-session WhatsApp transport built on whatsapp-web.js. Each ' +
       'session is one real number (paired by QR); send with human-like pacing through a ' +
@@ -35,8 +36,9 @@ export const openApiDocument = {
       get: {
         tags: ['System'],
         summary: 'Liveness',
-        description: 'Open, no auth. Reports how many sessions exist and how many are connected.',
+        description: 'Open, no auth. Sessions by status and the webhook backlog. With `?strict=1` it answers 503 when no registered number is connected (for an uptime probe).',
         security: [],
+        parameters: [{ name: 'strict', in: 'query', required: false, schema: { type: 'string', enum: ['1'] } }],
         responses: {
           200: { description: 'Service is up.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Health' } } } },
         },
@@ -89,10 +91,24 @@ export const openApiDocument = {
       post: {
         tags: ['Sessions'],
         summary: 'Create (or get) a session',
-        description: 'Idempotent. Creates the session if new and starts pairing; returns its state (with a QR while scanning).',
+        description:
+          'Idempotent. Creates the session if new and starts pairing; returns its state (with a QR while scanning). ' +
+          '`webhookUrl` is where this session’s events go — one worker can serve several Courant environments; ' +
+          'without it, `COURANT_WEBHOOK_URL`. Passing it again updates it.',
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { type: 'object', required: ['id'], properties: { id: { type: 'string', example: 'project_64f…' } } } } },
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                  id: { type: 'string', example: 'project_64f…' },
+                  webhookUrl: { type: 'string', format: 'uri', example: 'https://courant.example.com/hooks/whatsapp' },
+                },
+              },
+            },
+          },
         },
         responses: {
           201: { description: 'Session state.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SessionState' } } } },
@@ -181,13 +197,34 @@ export const openApiDocument = {
     '/api/v1/metrics': {
       get: { tags: ['System'], summary: 'Aggregate across sessions', responses: { 200: { description: 'Totals.', content: { 'application/json': { schema: { type: 'object', properties: { sessions: { type: 'integer' }, connected: { type: 'integer' } } } } } } } },
     },
+    '/metrics': {
+      get: {
+        tags: ['System'],
+        summary: 'Prometheus metrics',
+        description:
+          'Text exposition for Prometheus (the API key as a bearer token): sessions by status, reconnects, queue sizes and the age of the oldest waiting message, ' +
+          'why a queue holds, webhook backlog and dead events, launches in progress, event-loop lag, memory.',
+        responses: { 200: { description: 'Prometheus text format.', content: { 'text/plain': { schema: { type: 'string' } } } }, 401: { $ref: '#/components/responses/Unauthorized' } },
+      },
+    },
   },
   webhooks: {
     'message.inbound': {
       post: {
         summary: 'Inbound message',
-        description: 'POSTed to `COURANT_WEBHOOK_URL`, signed `X-Signature: sha256=<hmac>` and `X-Token`. Carries the `sessionId`.',
+        description:
+          'POSTed to the session’s `webhookUrl` (else `COURANT_WEBHOOK_URL`), signed `X-Signature: sha256=<hmac>` and `X-Token`. ' +
+          'Every event carries the `sessionId` and an `eventId`. Events are stored before they are sent and retried with backoff for up to 3 days, ' +
+          'in order per destination: delivery is at-least-once, so drop a repeated `eventId`.',
         requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/WebhookInbound' } } } },
+        responses: { 200: { description: 'Acknowledged.' } },
+      },
+    },
+    'session.status': {
+      post: {
+        summary: 'Session status',
+        description: 'The session changed state. `logged_out` means the number was unlinked or banned: nothing is sent until it is paired again (restart the session for a new QR); queued messages wait.',
+        requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/WebhookSession' } } } },
         responses: { 200: { description: 'Acknowledged.' } },
       },
     },
@@ -212,21 +249,45 @@ export const openApiDocument = {
     },
     schemas: {
       Error: { type: 'object', properties: { error: { type: 'string' } } },
-      Health: { type: 'object', properties: { ok: { type: 'boolean' }, sessions: { type: 'integer' }, connected: { type: 'integer' }, ready: { type: 'boolean' } } },
+      Health: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          sessions: { type: 'integer' },
+          connected: { type: 'integer' },
+          byStatus: { type: 'object', additionalProperties: { type: 'integer' } },
+          ready: { type: 'boolean' },
+          webhookBacklog: { type: 'integer', description: 'Webhook events not delivered yet.' },
+        },
+      },
       SessionSummary: {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          status: { type: 'string', enum: ['disconnected', 'scanning', 'connected'] },
+          status: {
+            type: 'string',
+            enum: sessionStatus,
+            description:
+              'scanning: waiting for the QR · connected · disconnected: reconnecting on its own · logged_out: unlinked or banned, restart to pair again · ' +
+              'error: kept failing to start, retried slowly · locked: another worker process runs this number',
+          },
           phone: { type: 'string' },
           pushName: { type: 'string' },
           uptimeSeconds: { type: 'integer' },
+          lastError: { type: 'string', description: 'Why the session last went down.' },
+          reconnects: { type: 'integer' },
         },
       },
       SessionState: {
         allOf: [
           { $ref: '#/components/schemas/SessionSummary' },
-          { type: 'object', properties: { qr: { type: 'string', description: 'data-URL QR, present while scanning.' } } },
+          {
+            type: 'object',
+            properties: {
+              qr: { type: 'string', description: 'data-URL QR, present while scanning.' },
+              holding: { type: ['string', 'null'], enum: ['disconnected', 'window', 'cap', null], description: 'Why the queue is not sending right now.' },
+            },
+          },
         ],
       },
       MediaPayload: {
@@ -266,6 +327,20 @@ export const openApiDocument = {
           dailyCap: { type: ['integer', 'null'], description: 'null = unlimited.' },
           total: { type: 'integer' },
           byStatus: { type: 'object', additionalProperties: { type: 'integer' } },
+          holding: { type: ['string', 'null'], enum: ['disconnected', 'window', 'cap', null] },
+          oldestQueuedAgeMs: { type: 'integer' },
+        },
+      },
+      WebhookSession: {
+        type: 'object',
+        properties: {
+          type: { const: 'session.status' },
+          sessionId: { type: 'string' },
+          status: { type: 'string', enum: sessionStatus },
+          phone: { type: 'string', description: 'The paired number, when connected.' },
+          reason: { type: 'string', description: 'WhatsApp’s reason (LOGOUT, UNPAIRED, TOS_BLOCK…) or the launch error.' },
+          eventId: { type: 'string' },
+          sentAt: { type: 'string', format: 'date-time' },
         },
       },
       WebhookInbound: {

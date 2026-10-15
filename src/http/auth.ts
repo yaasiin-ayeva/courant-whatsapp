@@ -10,13 +10,22 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction): voi
   res.status(401).json({ error: 'invalid api key' })
 }
 
-// ── tiny fixed-window rate limiter (per key or IP) ─────────────────────────────
+// ── tiny fixed-window rate limiter ─────────────────────────────────────────────
+// Counted per key *and* per session: one Courant key drives every number, and
+// twenty busy numbers must not share one budget. Unauthenticated calls count per IP.
 const WINDOW_MS = 60_000
 const MAX_PER_WINDOW = 120
 const hits = new Map<string, { count: number; resetAt: number }>()
 
+// Expired windows are dropped, so the map cannot grow without bound.
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, slot] of hits) if (slot.resetAt < now) hits.delete(k)
+}, WINDOW_MS).unref()
+
 export function rateLimit(req: Request, res: Response, next: NextFunction): void {
-  const id = keyOf(req) || req.ip || 'anon'
+  const session = /^\/sessions\/([^/]+)/.exec(req.path)?.[1] ?? ''
+  const id = `${keyOf(req) || req.ip || 'anon'}|${session}`
   const now = Date.now()
   const slot = hits.get(id)
   if (!slot || slot.resetAt < now) {

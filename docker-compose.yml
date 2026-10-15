@@ -1,5 +1,8 @@
 # Deploy: a single service behind a reverse proxy (Caddy/nginx) that terminates TLS.
 # The app binds to localhost only; map it to a free local port on the host.
+#
+# Sizing (see README): about 0.7 GB of RAM per paired number at peak plus 1 GB,
+# and one vCPU per 4 numbers. Set WA_MEM_LIMIT to fit the host.
 services:
   worker:
     build: .
@@ -7,11 +10,24 @@ services:
     container_name: courant-whatsapp
     restart: unless-stopped
     env_file: .env
+    # A real PID 1: reaps the Chromium child processes a crash leaves behind.
+    init: true
+    # Time for each queue to finish the message in flight and the browsers to close.
+    stop_grace_period: 60s
+    # One runaway browser must not take the host down with it.
+    mem_limit: ${WA_MEM_LIMIT:-12g}
+    pids_limit: 4096
     ports:
       - "127.0.0.1:8100:8088"   # host:container — reverse-proxy localhost:8100
     volumes:
       - wa_session:/app/.wwebjs_auth   # persisted WhatsApp sessions (scan once)
-      - wa_data:/app/data              # durable queues + session registry
+      - wa_data:/app/data              # worker.db: registry, queues, webhook outbox
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8088/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
 volumes:
   wa_session:

@@ -1,37 +1,74 @@
 /**
- * Durable, human-paced outbound queue — one instance per session.
+ * Durable, human-paced outbound queue — one per session, stored in SQLite.
  *
- * Jobs are persisted to disk so a restart never drops a message, and are drained
- * one at a time with: a daily cap + optional warm-up ramp, an optional quiet-hours
- * window, a per-recipient minimum gap, a randomised human delay between sends, and
- * bounded retries. Each terminal job stays queryable (and idempotent by
- * idempotencyKey) for WA_JOB_TTL_MS. This is the only thing that calls a session's
- * send primitives, so pacing is enforced in exactly one place per number.
+ * Jobs are drained one at a time with: a daily cap + optional warm-up ramp, an
+ * optional quiet-hours window, a per-recipient minimum gap, a randomised human
+ * delay between sends, and bounded retries. Each terminal job stays queryable
+ * (and idempotent by idempotencyKey) for WA_JOB_TTL_MS. This is the only thing
+ * that calls a session's send primitives, so pacing is enforced in exactly one
+ * place per number.
+ *
+ * A job caught mid-send by a crash is re-checked against the chat before it
+ * goes again, so a restart does not message the same person twice.
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { env } from '../config/env'
 import { logger } from './logger'
-import { emit } from './webhook'
+import { emit } from './outbox'
+import { all, get, run, tx } from './db'
 import { SendError } from './errors'
 import { toE164 } from '../utils/phone'
-import { dayKeyInTz, hourInTz, humanDelay, sleep } from '../utils/time'
+import { dayKeyInTz, hourInTz, humanDelay } from '../utils/time'
 import { randomId } from '../utils/hmac'
-import type { Job, JobView, MediaPayload, SendRequest } from '../types'
+import type { Job, JobStatus, JobView, MediaPayload, SendRequest } from '../types'
 
 /** What the queue needs from its session to deliver a job. */
 export interface Sender {
   isReady(): boolean
   sendText(to: string, text: string): Promise<{ waId: string }>
   sendMedia(to: string, media: MediaPayload): Promise<{ waId: string }>
+  /** Was this exact text sent to `to` since `sinceMs`? Used after a crash, before sending again. */
+  alreadySent(to: string, text: string, sinceMs: number): Promise<boolean>
 }
 
-interface Persisted {
-  jobs: Job[]
-  sentByDay: Record<string, number>
-  firstDay: string | null
-  lastSentToRecipient: Record<string, number>
+/** Why the queue is not sending right now, for metrics and the status API. */
+export type Hold = 'disconnected' | 'window' | 'cap' | null
+
+interface JobRow {
+  id: string
+  session_id: string
+  status: JobStatus
+  kind: 'text' | 'media'
+  to_raw: string
+  to_e164: string
+  text: string | null
+  media: string | null
+  media_path: string | null
+  idempotency_key: string | null
+  attempts: number
+  wa_id: string | null
+  error: string | null
+  verify: number
+  created_at: number
+  updated_at: number
 }
+
+const toJob = (r: JobRow): Job => ({
+  id: r.id,
+  to: r.to_raw,
+  toE164: r.to_e164,
+  kind: r.kind,
+  text: r.text ?? undefined,
+  media: r.media ? (JSON.parse(r.media) as MediaPayload) : undefined,
+  idempotencyKey: r.idempotency_key ?? undefined,
+  status: r.status,
+  attempts: r.attempts,
+  waId: r.wa_id ?? undefined,
+  error: r.error ?? undefined,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at
+})
 
 const toView = (j: Job): JobView => ({
   id: j.id,
@@ -41,10 +78,8 @@ const toView = (j: Job): JobView => ({
   error: j.error,
   attempts: j.attempts,
   createdAt: new Date(j.createdAt).toISOString(),
-  updatedAt: new Date(j.updatedAt).toISOString(),
+  updatedAt: new Date(j.updatedAt).toISOString()
 })
-
-const isTerminal = (s: string): boolean => s === 'sent' || s === 'failed'
 
 function daysBetween(fromKey: string, toKey: string): number {
   const a = Date.parse(`${fromKey}T00:00:00Z`)
@@ -53,70 +88,66 @@ function daysBetween(fromKey: string, toKey: string): number {
   return Math.round((b - a) / (24 * 60 * 60 * 1000))
 }
 
+/** Terminal jobs past their TTL and stale per-recipient gaps, for every session. */
+export function pruneAll(): void {
+  const cutoff = Date.now() - env.jobTtlMs
+  for (const r of all<{ media_path: string }>("SELECT media_path FROM jobs WHERE status IN ('sent','failed') AND updated_at < ? AND media_path IS NOT NULL", cutoff))
+    fs.rmSync(r.media_path, { force: true })
+  run("DELETE FROM jobs WHERE status IN ('sent','failed') AND updated_at < ?", cutoff)
+  run('DELETE FROM recipient_last WHERE at < ?', Date.now() - Math.max(env.perRecipientMinMs, 24 * 60 * 60 * 1000))
+}
+
 export class Queue {
-  private jobs: Job[] = []
-  private sentByDay: Record<string, number> = {}
-  private firstDay: string | null = null
-  private lastSentToRecipient: Record<string, number> = {}
   private draining = false
+  private stopped = false
+  private hold: Hold = null
+  private inFlight: Promise<void> | null = null
+  /** Wakes a waiting drain loop early (stop, or a newly queued job). */
+  private wake: (() => void) | null = null
 
   constructor(
     private readonly sessionId: string,
-    private readonly file: string,
+    private readonly mediaDir: string,
     private readonly sender: Sender
   ) {
-    this.load()
-  }
-
-  // ── persistence ────────────────────────────────────────────────────────────
-  private load(): void {
-    try {
-      fs.mkdirSync(path.dirname(this.file), { recursive: true })
-      const data = JSON.parse(fs.readFileSync(this.file, 'utf8')) as Partial<Persisted>
-      this.jobs = Array.isArray(data.jobs) ? data.jobs : []
-      this.sentByDay = data.sentByDay ?? {}
-      this.firstDay = data.firstDay ?? null
-      this.lastSentToRecipient = data.lastSentToRecipient ?? {}
-      for (const j of this.jobs) if (j.status === 'sending' || j.status === 'held') j.status = 'queued'
-      logger.info('queue loaded', { session: this.sessionId, jobs: this.jobs.length })
-    } catch {
-      logger.info('queue starting empty', { session: this.sessionId })
-    }
-  }
-
-  private save(): void {
-    const data: Persisted = { jobs: this.jobs, sentByDay: this.sentByDay, firstDay: this.firstDay, lastSentToRecipient: this.lastSentToRecipient }
-    const tmp = `${this.file}.tmp`
-    try {
-      fs.writeFileSync(tmp, JSON.stringify(data))
-      fs.renameSync(tmp, this.file)
-    } catch (err) {
-      logger.error('queue save failed', { session: this.sessionId, error: (err as Error)?.message })
-    }
-  }
-
-  private prune(): void {
-    const cutoff = Date.now() - env.jobTtlMs
-    this.jobs = this.jobs.filter((j) => !isTerminal(j.status) || j.updatedAt >= cutoff)
-    for (const [k, t] of Object.entries(this.lastSentToRecipient)) if (t < Date.now() - 24 * 60 * 60 * 1000) delete this.lastSentToRecipient[k]
+    // A job left mid-send by a crash is checked against the chat before it goes again.
+    const r = run("UPDATE jobs SET status = 'queued', verify = 1 WHERE session_id = ? AND status = 'sending'", sessionId)
+    const pending = get<{ n: number }>("SELECT COUNT(*) AS n FROM jobs WHERE session_id = ? AND status = 'queued'", sessionId)?.n ?? 0
+    logger.info('queue loaded', { session: sessionId, queued: pending, resumedMidSend: Number(r.changes) })
   }
 
   // ── public API ─────────────────────────────────────────────────────────────
   enqueue(req: SendRequest): Job {
     if (req.idempotencyKey) {
-      const existing = this.jobs.find((j) => j.idempotencyKey === req.idempotencyKey)
-      if (existing) return existing
+      const existing = get<JobRow>('SELECT * FROM jobs WHERE session_id = ? AND idempotency_key = ?', this.sessionId, req.idempotencyKey)
+      if (existing) return toJob(existing)
     }
     const now = Date.now()
-    const job: Job = { ...req, id: randomId('msg_'), toE164: toE164(req.to) || req.to, status: 'queued', attempts: 0, createdAt: now, updatedAt: now }
-    this.jobs.push(job)
-    this.save()
-    void this.drain()
-    return job
+    const id = randomId('msg_')
+    let mediaJson: string | null = null
+    let mediaPath: string | null = null
+    if (req.media) {
+      // The base64 goes to a file: rows stay small however large the attachment.
+      const { base64, ...meta } = req.media
+      mediaJson = JSON.stringify(meta)
+      if (base64) {
+        mediaPath = path.join(this.mediaDir, id)
+        fs.mkdirSync(this.mediaDir, { recursive: true })
+        fs.writeFileSync(mediaPath, base64)
+      }
+    }
+    run(
+      `INSERT INTO jobs (id, session_id, status, kind, to_raw, to_e164, text, media, media_path, idempotency_key, attempts, created_at, updated_at)
+       VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      id, this.sessionId, req.kind, req.to, toE164(req.to) || req.to, req.text ?? null, mediaJson, mediaPath, req.idempotencyKey ?? null, now, now
+    )
+    this.kick()
+    return this.get(id)!
   }
 
   get(id: string): Job | undefined {
-    return this.jobs.find((j) => j.id === id)
+    const r = get<JobRow>('SELECT * FROM jobs WHERE id = ? AND session_id = ?', id, this.sessionId)
+    return r ? toJob(r) : undefined
   }
 
   view(id: string): JobView | undefined {
@@ -125,35 +156,45 @@ export class Queue {
   }
 
   metrics() {
-    const today = dayKeyInTz(env.tz)
     const byStatus: Record<string, number> = {}
-    for (const j of this.jobs) byStatus[j.status] = (byStatus[j.status] ?? 0) + 1
+    for (const r of all<{ status: string; n: number }>('SELECT status, COUNT(*) AS n FROM jobs WHERE session_id = ? GROUP BY status', this.sessionId)) byStatus[r.status] = r.n
+    const oldest = get<{ at: number | null }>("SELECT MIN(created_at) AS at FROM jobs WHERE session_id = ? AND status = 'queued'", this.sessionId)?.at
     return {
-      queued: this.jobs.filter((j) => j.status === 'queued' || j.status === 'held').length,
-      sentToday: this.sentByDay[today] ?? 0,
-      dailyCap: this.effectiveCap(),
-      total: this.jobs.length,
+      queued: byStatus.queued ?? 0,
+      sentToday: this.sentToday(),
+      dailyCap: Number.isFinite(this.effectiveCap()) ? this.effectiveCap() : null,
+      total: Object.values(byStatus).reduce((s, n) => s + n, 0),
       byStatus,
+      holding: this.hold,
+      oldestQueuedAgeMs: oldest ? Date.now() - oldest : 0
     }
   }
 
   kick(): void {
+    this.wake?.()
     void this.drain()
   }
 
+  /** Stops the loop after the job in flight (if any) and waits for it. */
+  async stop(): Promise<void> {
+    this.stopped = true
+    this.wake?.()
+    await this.inFlight
+  }
+
   // ── pacing policy ──────────────────────────────────────────────────────────
+  private sentToday(): number {
+    return get<{ count: number }>('SELECT count FROM sent_per_day WHERE session_id = ? AND day = ?', this.sessionId, dayKeyInTz(env.tz))?.count ?? 0
+  }
+
   private effectiveCap(): number {
     let cap = env.dailyCap > 0 ? env.dailyCap : Number.POSITIVE_INFINITY
     if (env.warmupEnabled) {
-      const start = this.firstDay ?? dayKeyInTz(env.tz)
-      const dayIndex = Math.max(0, daysBetween(start, dayKeyInTz(env.tz)))
+      const first = get<{ first_day: string | null }>('SELECT first_day FROM sessions WHERE id = ?', this.sessionId)?.first_day
+      const dayIndex = Math.max(0, daysBetween(first ?? dayKeyInTz(env.tz), dayKeyInTz(env.tz)))
       cap = Math.min(cap, Math.round(env.warmupStart * Math.pow(env.warmupGrowth, dayIndex)))
     }
     return cap
-  }
-
-  private capReached(): boolean {
-    return (this.sentByDay[dayKeyInTz(env.tz)] ?? 0) >= this.effectiveCap()
   }
 
   private inWindow(): boolean {
@@ -161,86 +202,111 @@ export class Queue {
     return h >= env.windowStartHour && h < env.windowEndHour
   }
 
-  private recipientWaitMs(toE164Key: string): number {
-    const last = this.lastSentToRecipient[toE164Key]
+  private recipientWaitMs(to: string): number {
+    const last = get<{ at: number }>('SELECT at FROM recipient_last WHERE session_id = ? AND to_e164 = ?', this.sessionId, to)?.at
     return last ? Math.max(0, env.perRecipientMinMs - (Date.now() - last)) : 0
   }
 
-  private nextQueued(): Job | undefined {
-    return this.jobs.filter((j) => j.status === 'queued').sort((a, b) => a.createdAt - b.createdAt)[0]
+  private nextQueued(): JobRow | undefined {
+    return get<JobRow>("SELECT * FROM jobs WHERE session_id = ? AND status = 'queued' ORDER BY created_at LIMIT 1", this.sessionId)
+  }
+
+  /** Sleeps, unless stopped (or woken for `wakeable` waits). */
+  private wait(ms: number, wakeable = false): Promise<void> {
+    if (this.stopped) return Promise.resolve()
+    return new Promise((resolve) => {
+      const t = setTimeout(done, ms)
+      function done() {
+        clearTimeout(t)
+        resolve()
+      }
+      // Pacing delays are not cut short by new work; only by a stop.
+      this.wake = wakeable ? done : () => (this.stopped ? done() : undefined)
+    })
   }
 
   private async drain(): Promise<void> {
-    if (this.draining) return
+    if (this.draining || this.stopped) return
     this.draining = true
     try {
-      for (;;) {
-        const job = this.nextQueued()
-        if (!job) break
+      while (!this.stopped) {
+        const row = this.nextQueued()
+        if (!row) break
         if (!this.sender.isReady()) {
-          await sleep(15_000)
+          this.hold = 'disconnected'
+          await this.wait(15_000, true)
           continue
         }
         if (!this.inWindow()) {
-          job.status = 'held'
-          this.save()
-          await sleep(60_000)
-          job.status = 'queued'
+          this.hold = 'window'
+          await this.wait(60_000)
           continue
         }
-        if (this.capReached()) {
-          job.status = 'held'
-          this.save()
-          await sleep(5 * 60_000)
-          job.status = 'queued'
+        if (this.sentToday() >= this.effectiveCap()) {
+          this.hold = 'cap'
+          await this.wait(5 * 60_000)
           continue
         }
-        const wait = this.recipientWaitMs(job.toE164)
-        if (wait > 0) await sleep(Math.min(wait, env.perRecipientMinMs))
-        await this.process(job)
-        if (this.nextQueued()) await sleep(humanDelay(env.sendMinMs, env.sendMaxMs))
+        this.hold = null
+        const gap = this.recipientWaitMs(row.to_e164)
+        if (gap > 0) await this.wait(Math.min(gap, env.perRecipientMinMs))
+        if (this.stopped) break
+        this.inFlight = this.process(row)
+        await this.inFlight
+        this.inFlight = null
+        if (this.nextQueued()) await this.wait(humanDelay(env.sendMinMs, env.sendMaxMs))
       }
-      this.prune()
-      this.save()
     } finally {
+      this.hold = null
       this.draining = false
     }
   }
 
-  private async process(job: Job): Promise<void> {
-    job.status = 'sending'
-    job.attempts += 1
-    job.updatedAt = Date.now()
-    this.save()
+  private loadMedia(row: JobRow): MediaPayload | undefined {
+    if (!row.media) return undefined
+    const meta = JSON.parse(row.media) as MediaPayload
+    return row.media_path ? { ...meta, base64: fs.readFileSync(row.media_path, 'utf8') } : meta
+  }
+
+  private markSent(row: JobRow, waId: string): void {
+    const now = Date.now()
+    const day = dayKeyInTz(env.tz)
+    tx(() => {
+      run("UPDATE jobs SET status = 'sent', wa_id = ?, error = NULL, verify = 0, updated_at = ? WHERE id = ?", waId, now, row.id)
+      run('INSERT INTO sent_per_day (session_id, day, count) VALUES (?, ?, 1) ON CONFLICT (session_id, day) DO UPDATE SET count = count + 1', this.sessionId, day)
+      run('UPDATE sessions SET first_day = ? WHERE id = ? AND first_day IS NULL', day, this.sessionId)
+      run('INSERT INTO recipient_last (session_id, to_e164, at) VALUES (?, ?, ?) ON CONFLICT (session_id, to_e164) DO UPDATE SET at = excluded.at', this.sessionId, row.to_e164, now)
+    })
+    if (row.media_path) fs.rmSync(row.media_path, { force: true })
+    logger.info('sent', { session: this.sessionId, id: row.id, to: row.to_e164, waId })
+    emit({ type: 'message.status', sessionId: this.sessionId, jobId: row.id, status: 'sent', to: row.to_e164, waId })
+  }
+
+  private async process(row: JobRow): Promise<void> {
+    const attempts = row.attempts + 1
+    run("UPDATE jobs SET status = 'sending', attempts = ?, updated_at = ? WHERE id = ?", attempts, Date.now(), row.id)
     try {
-      const result = job.kind === 'media' && job.media ? await this.sender.sendMedia(job.toE164, job.media) : await this.sender.sendText(job.toE164, job.text ?? '')
-      job.status = 'sent'
-      job.waId = result.waId
-      job.updatedAt = Date.now()
-      const day = dayKeyInTz(env.tz)
-      this.sentByDay[day] = (this.sentByDay[day] ?? 0) + 1
-      if (!this.firstDay) this.firstDay = day
-      this.lastSentToRecipient[job.toE164] = Date.now()
-      this.save()
-      logger.info('sent', { session: this.sessionId, id: job.id, to: job.toE164, waId: job.waId })
-      void emit({ type: 'message.status', sessionId: this.sessionId, jobId: job.id, status: 'sent', to: job.toE164, waId: job.waId })
+      // Left mid-send by a crash: if it is already in the chat, do not send it again.
+      if (row.verify && row.kind === 'text' && row.text && (await this.sender.alreadySent(row.to_e164, row.text, row.updated_at - 60_000))) {
+        logger.info('found in the chat after a restart, not sent again', { session: this.sessionId, id: row.id })
+        this.markSent(row, '')
+        return
+      }
+      const result = row.kind === 'media' ? await this.sender.sendMedia(row.to_e164, this.loadMedia(row)!) : await this.sender.sendText(row.to_e164, row.text ?? '')
+      this.markSent(row, result.waId)
     } catch (err) {
       const e = err as SendError
       const retryable = e instanceof SendError ? e.retryable : true
-      if (retryable && job.attempts < env.maxAttempts) {
-        job.status = 'queued'
-        job.error = e.message
-        job.updatedAt = Date.now()
-        this.save()
-        logger.warn('send failed, will retry', { session: this.sessionId, id: job.id, attempt: job.attempts, error: e.message })
-        await sleep(job.attempts * 5_000)
+      const now = Date.now()
+      if (retryable && attempts < env.maxAttempts) {
+        run("UPDATE jobs SET status = 'queued', error = ?, updated_at = ? WHERE id = ?", e.message, now, row.id)
+        logger.warn('send failed, will retry', { session: this.sessionId, id: row.id, attempt: attempts, error: e.message })
+        await this.wait(attempts * env.retryBaseMs)
       } else {
-        job.status = 'failed'
-        job.error = e.message
-        job.updatedAt = Date.now()
-        this.save()
-        logger.error('send failed, giving up', { session: this.sessionId, id: job.id, error: e.message })
-        void emit({ type: 'message.status', sessionId: this.sessionId, jobId: job.id, status: 'failed', to: job.toE164, error: e.message })
+        run("UPDATE jobs SET status = 'failed', error = ?, verify = 0, updated_at = ? WHERE id = ?", e.message, now, row.id)
+        if (row.media_path) fs.rmSync(row.media_path, { force: true })
+        logger.error('send failed, giving up', { session: this.sessionId, id: row.id, error: e.message })
+        emit({ type: 'message.status', sessionId: this.sessionId, jobId: row.id, status: 'failed', to: row.to_e164, error: e.message })
       }
     }
   }

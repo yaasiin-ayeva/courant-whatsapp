@@ -50,7 +50,20 @@ v1.post(
       res.status(400).json({ error: 'invalid or missing session id' })
       return
     }
-    const s = manager.create(id)
+    // Where this session's events go (optional; COURANT_WEBHOOK_URL otherwise).
+    const raw = req.body?.webhookUrl
+    let webhookUrl: string | undefined
+    if (raw !== undefined && raw !== null && raw !== '') {
+      try {
+        const u = new URL(String(raw))
+        if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('protocol')
+        webhookUrl = u.toString()
+      } catch {
+        res.status(400).json({ error: 'webhookUrl must be an http(s) URL' })
+        return
+      }
+    }
+    const s = manager.create(id, webhookUrl)
     res.status(201).json(await s.getState())
   })
 )

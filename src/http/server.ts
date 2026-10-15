@@ -7,6 +7,8 @@ import { openApiDocument } from './openapi'
 import { docsHtml, landingHtml } from './pages'
 import { ogImageBase64 } from './ogImage'
 import { manager } from '../core/manager'
+import { outboxMetrics } from '../core/outbox'
+import { prometheus } from '../core/metrics'
 import { logger } from '../core/logger'
 
 export function buildApp(): Application {
@@ -19,15 +21,27 @@ export function buildApp(): Application {
     next()
   })
 
-  // Liveness — open, no auth, cheap. Reports how many sessions are connected.
-  app.get('/health', (_req, res) => {
+  // Liveness — open, no auth, cheap. ?strict=1 answers 503 when no registered
+  // number is connected (for a readiness probe or an uptime alert).
+  app.get('/health', (req, res) => {
     const sessions = manager.list()
-    res.json({
+    const byStatus: Record<string, number> = {}
+    for (const s of sessions) byStatus[s.status] = (byStatus[s.status] ?? 0) + 1
+    const ready = sessions.length === 0 || sessions.some((s) => s.status === 'connected')
+    const ob = outboxMetrics()
+    res.status(req.query.strict && !ready ? 503 : 200).json({
       ok: true,
       sessions: sessions.length,
-      connected: sessions.filter((s) => s.status === 'connected').length,
-      ready: sessions.some((s) => s.status === 'connected'),
+      connected: byStatus.connected ?? 0,
+      byStatus,
+      ready,
+      webhookBacklog: ob.pending,
     })
+  })
+
+  // Prometheus metrics (API key as a bearer token).
+  app.get('/metrics', apiKeyAuth, (_req, res) => {
+    res.type('text/plain; version=0.0.4').send(prometheus())
   })
 
   // Public landing + interactive API docs (Scalar) + the OpenAPI spec.

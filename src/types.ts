@@ -1,4 +1,12 @@
-export type SessionStatus = 'disconnected' | 'scanning' | 'connected'
+/**
+ * - scanning: waiting for the QR to be scanned
+ * - connected: paired and online
+ * - disconnected: offline, reconnecting on its own
+ * - logged_out: the number was unlinked or banned; nothing runs until it is paired again (restart)
+ * - error: kept failing to start; retried slowly, needs a look
+ * - locked: another worker process holds this number's profile
+ */
+export type SessionStatus = 'disconnected' | 'scanning' | 'connected' | 'logged_out' | 'error' | 'locked'
 
 export interface SessionState {
   /** The session id (one per paired number; Courant uses the project id). */
@@ -10,6 +18,11 @@ export interface SessionState {
   /** data-URL QR to scan, present while status is 'scanning'. */
   qr?: string
   uptimeSeconds: number
+  /** Why the session last went down (WhatsApp's reason, or the launch error). */
+  lastError?: string
+  reconnects?: number
+  /** Why the queue is not sending right now. */
+  holding?: 'disconnected' | 'window' | 'cap' | null
 }
 
 /** A session in a list (no QR). */
@@ -19,6 +32,8 @@ export interface SessionSummary {
   phone?: string
   pushName?: string
   uptimeSeconds: number
+  lastError?: string
+  reconnects?: number
 }
 
 export type JobStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'held'
@@ -80,6 +95,14 @@ export type WebhookEvent =
       timestamp: number
       hasMedia: boolean
       messageType: string
+    }
+  | {
+      /** The session changed state: connected, logged out (unlinked or banned), in error… */
+      type: 'session.status'
+      sessionId: string
+      status: SessionStatus
+      phone?: string
+      reason?: string
     }
   | {
       type: 'message.status'

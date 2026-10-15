@@ -73,7 +73,25 @@ export const env = {
 
   /** Retries + how long terminal jobs stay queryable/idempotent. */
   maxAttempts: num('WA_MAX_ATTEMPTS', 3),
+  /** Wait before retry n is n × this (ms). */
+  retryBaseMs: num('WA_RETRY_BASE_MS', 5_000),
   jobTtlMs: num('WA_JOB_TTL_MS', 24 * 60 * 60 * 1000),
+
+  // ── resilience ──────────────────────────────────────────────────────────────
+  /** Names this process in the per-session lock (defaults to the host name). */
+  instanceId: str('WA_INSTANCE_ID') || str('HOSTNAME', 'worker'),
+  /** Chromium launches allowed at the same time: a restart or a network drop must not start every number at once. */
+  maxConcurrentLaunches: num('WA_MAX_CONCURRENT_LAUNCHES', 2),
+  /** A launch that has not settled by then frees its slot anyway (Puppeteer can hang). */
+  launchTimeoutMs: num('WA_LAUNCH_TIMEOUT_MS', 90_000),
+  /** Reconnect backoff: base, ceiling, and consecutive failures before the session is marked in error. */
+  reconnectBaseMs: num('WA_RECONNECT_BASE_MS', 5_000),
+  reconnectMaxMs: num('WA_RECONNECT_MAX_MS', 5 * 60_000),
+  maxReconnects: num('WA_MAX_RECONNECTS', 10),
+  /** How often a connected session is probed (a Chromium killed by the kernel sends no event). */
+  healthProbeMs: num('WA_HEALTH_PROBE_MS', 60_000),
+  /** Webhook outbox: give up on an event after this long (it stays visible in metrics). */
+  outboxMaxAgeMs: num('WA_OUTBOX_MAX_AGE_MS', 3 * 24 * 60 * 60 * 1000),
 
   /** Landing page "request an API key" form → emailed here via SMTP. */
   contactEmail: str('CONTACT_EMAIL', 'ayevayaasiin@gmail.com'),
@@ -96,6 +114,8 @@ export function validateEnv(): void {
   if (env.typingMinMs > env.typingMaxMs) problems.push('TYPING_MIN_MS must be <= TYPING_MAX_MS')
   if (env.windowStartHour < 0 || env.windowEndHour > 24 || env.windowStartHour >= env.windowEndHour)
     problems.push('WINDOW_START_HOUR/WINDOW_END_HOUR invalid (need 0 <= start < end <= 24)')
+  if (env.maxConcurrentLaunches < 1) problems.push('WA_MAX_CONCURRENT_LAUNCHES must be >= 1')
+  if (env.reconnectBaseMs > env.reconnectMaxMs) problems.push('WA_RECONNECT_BASE_MS must be <= WA_RECONNECT_MAX_MS')
   if (env.nodeEnv === 'production' && env.apiKeys.size === 0)
     problems.push('WA_API_KEYS is empty in production — the API would be unauthenticated')
   if (problems.length) throw new Error(`Invalid configuration:\n- ${problems.join('\n- ')}`)

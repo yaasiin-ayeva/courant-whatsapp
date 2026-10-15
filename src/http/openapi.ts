@@ -273,7 +273,8 @@ export const openApiDocument = {
         properties: {
           type: { const: 'message.inbound' },
           sessionId: { type: 'string' },
-          from: { type: 'string', example: '22890000000@c.us' },
+          from: { type: 'string', example: '22890000000@c.us', description: 'The sender’s WhatsApp id — a phone JID (@c.us) or a @lid, which holds no number.' },
+          fromPhone: { type: 'string', example: '+22890000000', description: 'The sender’s number in E.164, resolved from a @lid when needed; empty when unknown (groups, channels).' },
           to: { type: 'string' },
           body: { type: 'string' },
           messageId: { type: 'string' },

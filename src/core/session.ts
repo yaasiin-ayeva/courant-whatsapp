@@ -133,6 +133,25 @@ export class Session implements Sender {
     }, delay)
   }
 
+  /**
+   * The sender's number in E.164, '' when it cannot be known (a group, a
+   * channel). WhatsApp now often names a person by a @lid, which holds no phone
+   * number; the client can map it back to one.
+   */
+  private async phoneOf(jid: string): Promise<string> {
+    const [user, server] = String(jid).split('@')
+    if (server === 'c.us') return user ? `+${user}` : ''
+    if (server !== 'lid') return ''
+    try {
+      const [r] = await this.client.getContactLidAndPhone([jid])
+      const pn = r?.pn?.split('@')[0]
+      return pn ? `+${pn}` : ''
+    } catch (err) {
+      logger.debug('lid to phone lookup failed', { session: this.id, error: (err as Error)?.message })
+      return ''
+    }
+  }
+
   private async onInbound(msg: Message): Promise<void> {
     try {
       if (msg.fromMe || msg.isStatus) return
@@ -140,6 +159,7 @@ export class Session implements Sender {
         type: 'message.inbound',
         sessionId: this.id,
         from: msg.from,
+        fromPhone: await this.phoneOf(msg.from),
         to: msg.to,
         body: msg.body ?? '',
         messageId: msg.id?._serialized ?? '',

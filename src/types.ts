@@ -72,6 +72,8 @@ export type WebhookEvent =
       type: 'message.inbound'
       sessionId: string
       from: string
+      /** The sender's number in E.164, resolved from a @lid when needed; '' when unknown. */
+      fromPhone: string
       to: string
       body: string
       messageId: string

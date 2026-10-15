@@ -182,13 +182,17 @@ export class Session implements Sender {
   private async resolveChatId(to: string): Promise<string> {
     const digits = toDigits(to)
     if (!digits) throw invalidRecipient(to)
-    if (env.validateNumbers) {
-      const id = await this.client.getNumberId(digits)
-      if (!id) throw notOnWhatsApp(to)
-      return id._serialized
-    }
     const chatId = toChatId(to)
     if (!chatId) throw invalidRecipient(to)
+    if (env.validateNumbers) {
+      // Confirm the number is on WhatsApp — but do NOT send to the id this returns.
+      // getNumberId now yields a @lid (WhatsApp's new LID identity); sending to a
+      // @lid chat id is broken in whatsapp-web.js (sendMessage resolves undefined →
+      // "Cannot read properties of undefined (reading 'id')"). The classic phone JID
+      // (@c.us) still routes correctly, so we validate here but send to @c.us below.
+      const id = await this.client.getNumberId(digits)
+      if (!id) throw notOnWhatsApp(to)
+    }
     return chatId
   }
 
@@ -210,7 +214,9 @@ export class Session implements Sender {
     const chatId = await this.resolveChatId(to)
     await this.simulateTyping(chatId, text.length)
     const sent = await this.client.sendMessage(chatId, text)
-    return { waId: sent.id?._serialized ?? '' }
+    // sendMessage can resolve undefined even on a delivered message when the Store
+    // serialization is out of sync; never crash on the return value.
+    return { waId: sent?.id?._serialized ?? '' }
   }
 
   async sendMedia(to: string, media: MediaPayload): Promise<{ waId: string }> {
@@ -222,7 +228,7 @@ export class Session implements Sender {
     const caption = media.caption ?? ''
     await this.simulateTyping(chatId, caption.length)
     const sent = await this.client.sendMessage(chatId, attachment, caption ? { caption } : {})
-    return { waId: sent.id?._serialized ?? '' }
+    return { waId: sent?.id?._serialized ?? '' }
   }
 
   async logout(): Promise<void> {

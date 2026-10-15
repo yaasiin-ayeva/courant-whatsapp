@@ -5,6 +5,7 @@
  * inbound messages to Courant (tagged with this session's id). The SessionManager
  * owns a set of these — one per paired number.
  */
+import fs from 'node:fs'
 import path from 'node:path'
 import pkg from 'whatsapp-web.js'
 import type { Client as WAClient, Message } from 'whatsapp-web.js'
@@ -69,7 +70,41 @@ export class Session implements Sender {
     this.client.on('message', (msg: Message) => void this.onInbound(msg))
   }
 
+  /**
+   * Remove the Chromium singleton lock files from this session's LocalAuth
+   * profile. whatsapp-web.js re-launches Chromium against the same userDataDir on
+   * every initialize(); if a previous browser did not exit cleanly (crash, SIGKILL,
+   * a reconnect that fired before the old process released the profile) the stale
+   * SingletonLock/Cookie/Socket make the new launch fail with "profile appears to
+   * be in use", which traps the session in an endless reconnect loop. Clearing them
+   * before each launch makes init idempotent and self-healing.
+   */
+  private clearProfileLock(): void {
+    try {
+      const dir = path.join(env.sessionDir, `session-${safeId(this.id)}`)
+      for (const f of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+        fs.rmSync(path.join(dir, f), { force: true })
+      }
+    } catch (err) {
+      logger.debug('profile lock cleanup skipped', { session: this.id, error: (err as Error)?.message })
+    }
+  }
+
+  /** Await the old client's Chromium exit, then build a fresh, freshly-wired client.
+   *  Sequencing the teardown before relaunch avoids two Chromium processes racing on
+   *  the same profile dir. */
+  private async recreate(): Promise<void> {
+    try {
+      await this.client.destroy()
+    } catch {
+      /* the old browser may already be gone; ignore */
+    }
+    this.client = new Client(buildClientConfig(safeId(this.id)))
+    this.wire()
+  }
+
   init(): void {
+    this.clearProfileLock()
     this.client.initialize().catch((err) => {
       logger.error('initialize failed', { session: this.id, error: (err as Error)?.message })
       this.scheduleReconnect()
@@ -83,10 +118,18 @@ export class Session implements Sender {
     logger.info('reconnecting', { session: this.id, inMs: delay })
     setTimeout(() => {
       if (this.destroyed) return
-      this.client.initialize().catch((err) => {
-        logger.error('reconnect failed', { session: this.id, error: (err as Error)?.message })
-        this.scheduleReconnect()
-      })
+      // Tear down the old browser, clear any stale profile lock, then relaunch with a
+      // fresh client — so a browser that failed to exit can't trap the session forever.
+      void this.recreate()
+        .then(() => {
+          if (this.destroyed) return
+          this.clearProfileLock()
+          return this.client.initialize()
+        })
+        .catch((err) => {
+          logger.error('reconnect failed', { session: this.id, error: (err as Error)?.message })
+          this.scheduleReconnect()
+        })
     }, delay)
   }
 

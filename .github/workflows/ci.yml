@@ -1,0 +1,22 @@
+# Courant WhatsApp worker — typecheck and test every push and PR.
+# Deploys stay manual (its own host); see README.
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        # node:sqlite needs Node >= 22.13.
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+        env: { PUPPETEER_SKIP_DOWNLOAD: 'true' }
+      - run: npm run typecheck
+      - run: npm test

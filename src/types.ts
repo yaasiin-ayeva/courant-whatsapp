@@ -105,6 +105,20 @@ export type WebhookEvent =
       reason?: string
     }
   | {
+      /**
+       * A receipt for a message we sent: delivered to the phone (✓✓) or read
+       * (blue ✓✓; a played voice note counts as read). Sent once per level.
+       */
+      type: 'message.ack'
+      sessionId: string
+      waId: string
+      /** The job that sent it, while the worker still keeps it. */
+      jobId?: string
+      to: string
+      status: 'delivered' | 'read'
+      at: number
+    }
+  | {
       type: 'message.status'
       sessionId: string
       jobId: string

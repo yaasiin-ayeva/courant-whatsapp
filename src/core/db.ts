@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 CREATE INDEX IF NOT EXISTS jobs_next ON jobs (session_id, status, created_at);
 CREATE INDEX IF NOT EXISTS jobs_terminal ON jobs (status, updated_at);
+CREATE INDEX IF NOT EXISTS jobs_wa_id ON jobs (session_id, wa_id) WHERE wa_id IS NOT NULL AND wa_id <> '';
 CREATE UNIQUE INDEX IF NOT EXISTS jobs_idempotency ON jobs (session_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE TABLE IF NOT EXISTS sent_per_day (
   session_id TEXT NOT NULL,

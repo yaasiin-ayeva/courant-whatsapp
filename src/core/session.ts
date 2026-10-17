@@ -74,6 +74,8 @@ export class Session implements Sender {
   private client: WAClient | null = null
   /** Bumped on every launch: events from an older client are ignored. */
   private generation = 0
+  /** Receipts already reported (waId:level), so a repeated ack is not re-sent. */
+  private readonly acked = new Set<string>()
   private status: SessionStatus = 'disconnected'
   private lastQr: string | null = null
   private lastError: string | undefined
@@ -169,6 +171,7 @@ export class Session implements Sender {
       else this.wentDown(String(reason))
     })
     client.on('message', (msg: Message) => current() && void this.onInbound(msg))
+    client.on('message_ack', (msg: Message, ack: number) => current() && this.onAck(msg, ack))
   }
 
   /** Offline but still paired: reconnect. */
@@ -319,6 +322,24 @@ export class Session implements Sender {
     }
   }
 
+  /** whatsapp-web.js ack levels: 2 = on the phone, 3 = read, 4 = played. */
+  private onAck(msg: Message, ack: number): void {
+    try {
+      if (!msg.fromMe || ack < 2) return
+      const waId = msg.id?._serialized ?? ''
+      if (!waId) return
+      const status = ack >= 3 ? 'read' : 'delivered'
+      // WhatsApp repeats receipts (and skips "delivered" when a message is read at once).
+      const key = `${waId}:${status}`
+      if (this.acked.has(key)) return
+      this.acked.add(key)
+      if (this.acked.size > 5000) this.acked.delete(this.acked.values().next().value as string)
+      emit({ type: 'message.ack', sessionId: this.id, waId, jobId: this.queue.jobIdForWaId(waId) ?? undefined, to: msg.to, status, at: Date.now() })
+    } catch (err) {
+      logger.warn('ack handling failed', { session: this.id, error: (err as Error)?.message })
+    }
+  }
+
   // ── state ──────────────────────────────────────────────────────────────────
 
   isReady(): boolean {
@@ -390,22 +411,37 @@ export class Session implements Sender {
     const client = this.connected()
     const chatId = await this.resolveChatId(client, to)
     await this.simulateTyping(client, chatId, text.length)
+    const since = Date.now() - 5_000
     const sent = await client.sendMessage(chatId, text)
     // sendMessage can resolve undefined even on a delivered message when the Store
-    // serialization is out of sync; never crash on the return value.
-    return { waId: sent?.id?._serialized ?? '' }
+    // serialization is out of sync; never crash on the return value. The id is
+    // then read back from the chat, so receipts can still be matched.
+    return { waId: sent?.id?._serialized || (await this.findSentId(chatId, text, since)) }
   }
 
   async sendMedia(to: string, media: MediaPayload): Promise<{ waId: string }> {
     const client = this.connected()
     const chatId = await this.resolveChatId(client, to)
     const attachment = media.url
-      ? await MessageMedia.fromUrl(media.url, { unsafeMime: true })
+      ? await MessageMedia.fromUrl(media.url, { unsafeMime: true, ...(media.filename ? { filename: media.filename } : {}) })
       : new MessageMedia(media.mimetype ?? 'application/octet-stream', media.base64 ?? '', media.filename)
     const caption = media.caption ?? ''
     await this.simulateTyping(client, chatId, caption.length)
+    const since = Date.now() - 5_000
     const sent = await client.sendMessage(chatId, attachment, caption ? { caption } : {})
-    return { waId: sent?.id?._serialized ?? '' }
+    return { waId: sent?.id?._serialized || (caption ? await this.findSentId(chatId, caption, since) : '') }
+  }
+
+  /** The id of the message we just sent with this text ('' when it cannot be found). */
+  private async findSentId(chatId: string, text: string, sinceMs: number): Promise<string> {
+    try {
+      const chat = await this.connected().getChatById(chatId)
+      const recent = await chat.fetchMessages({ limit: 10, fromMe: true })
+      const m = [...recent].reverse().find((x) => x.body === text && x.timestamp * 1000 >= sinceMs)
+      return m?.id?._serialized ?? ''
+    } catch {
+      return ''
+    }
   }
 
   /** After a crash mid-send: is this exact text already in the chat since `sinceMs`? */

@@ -117,6 +117,12 @@ export class Queue {
   }
 
   // ── public API ─────────────────────────────────────────────────────────────
+  /** The job that sent a WhatsApp message (for its delivery receipts); null once pruned. */
+  jobIdForWaId(waId: string): string | null {
+    if (!waId) return null
+    return get<{ id: string }>('SELECT id FROM jobs WHERE session_id = ? AND wa_id = ?', this.sessionId, waId)?.id ?? null
+  }
+
   enqueue(req: SendRequest): Job {
     if (req.idempotencyKey) {
       const existing = get<JobRow>('SELECT * FROM jobs WHERE session_id = ? AND idempotency_key = ?', this.sessionId, req.idempotencyKey)

@@ -235,6 +235,14 @@ export const openApiDocument = {
         responses: { 200: { description: 'Acknowledged.' } },
       },
     },
+    'message.ack': {
+      post: {
+        summary: 'Delivered / read receipt',
+        description: 'A message we sent reached the phone (`delivered`, ✓✓) or was read (`read`, blue ✓✓). Matched by `waId` (from `message.status`); `jobId` is included while the worker keeps the job. A read message may never report `delivered`; read receipts turned off by the recipient never report `read`.',
+        requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/WebhookAck' } } } },
+        responses: { 200: { description: 'Acknowledged.' } },
+      },
+    },
   },
   components: {
     securitySchemes: {
@@ -369,6 +377,19 @@ export const openApiDocument = {
           to: { type: 'string' },
           waId: { type: 'string' },
           error: { type: 'string' },
+          sentAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      WebhookAck: {
+        type: 'object',
+        properties: {
+          type: { const: 'message.ack' },
+          sessionId: { type: 'string' },
+          waId: { type: 'string' },
+          jobId: { type: 'string' },
+          to: { type: 'string' },
+          status: { type: 'string', enum: ['delivered', 'read'] },
+          at: { type: 'integer', description: 'Unix ms' },
           sentAt: { type: 'string', format: 'date-time' },
         },
       },
